@@ -85,6 +85,121 @@
   .site-zoom__next { right: 8px; }
 }
 
+/* Mobile image zoom (site.js openTouchZoom): Wix's TouchMediaZoom styles. */
+.c8MB3Z {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  -webkit-tap-highlight-color: #0000;
+  z-index: var(--above-all-z-index);
+  will-change: transform;
+  display: flex;
+  overflow: auto;
+  background-color: #000;
+  justify-content: center;
+}
+.c8MB3Z.zwdzEv { align-items: center; }
+.c8MB3Z.zwdzEv .EAex_q { background-color: #0000; }
+.vkDW7n { opacity: 0; }
+.UOelX6 {
+  cursor: pointer;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  transition: opacity .5s;
+  display: flex;
+  overflow: visible;
+}
+.BNGB3e {
+  cursor: pointer;
+  z-index: 500;
+  background-color: #00000080;
+  background-repeat: no-repeat;
+  background-size: cover;
+  width: 48px;
+  height: 48px;
+  display: inline-block;
+  position: fixed;
+  top: 5px;
+  right: 5px;
+  overflow: hidden;
+}
+.BNGB3e .MyPUn_ { stroke: #fff; stroke-width: 15px; position: absolute; }
+.VVx1CG {
+  white-space: pre-wrap;
+  will-change: transform;
+  background: linear-gradient(#0000 0%, #000 100%);
+  flex-wrap: wrap;
+  align-content: flex-end;
+  align-items: flex-end;
+  margin: auto;
+  display: flex;
+  position: absolute;
+  inset: 60% 0 0;
+}
+.VVx1CG .Tnsweu {
+  text-align: center;
+  color: #fff;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overflow-wrap: break-word;
+  flex-basis: 100%;
+  margin: 0 10px 10px;
+  font: 100 14px/1.5 Helvetica;
+  overflow: hidden;
+}
+.IUNMZY, .tVi4X8 {
+  text-indent: -9999px;
+  cursor: pointer;
+  opacity: .9;
+  width: 33%;
+  height: 100%;
+  transition: opacity .5s ease 0s;
+  position: fixed;
+  top: 0;
+  overflow: hidden;
+}
+.IUNMZY { right: 0; }
+.IUNMZY .EAex_q { right: 15px; }
+.tVi4X8 { left: 0; }
+.tVi4X8 .EAex_q { left: 15px; }
+.EAex_q {
+  stroke: #fff;
+  stroke-width: 20px;
+  background-color: #00000080;
+  width: 35px;
+  height: 35px;
+  margin-top: -17px;
+  position: absolute;
+  top: 50%;
+}
+@media (orientation: portrait) and (max-width: 767px) {
+  .BNGB3e { background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAYAAACOEfKtAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyJpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYxIDY0LjE0MDk0OSwgMjAxMC8xMi8wNy0xMDo1NzowMSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNS4xIFdpbmRvd3MiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6MjI1RUZBRTU4MDE4MTFFMjgyOTlDMjAyODAzRjlEQjMiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6MjI1RUZBRTY4MDE4MTFFMjgyOTlDMjAyODAzRjlEQjMiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDoyMjVFRkFFMzgwMTgxMUUyODI5OUMyMDI4MDNGOURCMyIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDoyMjVFRkFFNDgwMTgxMUUyODI5OUMyMDI4MDNGOURCMyIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/PrAgZccAAALvSURBVHja7NxLaxpRGAZgL5OgbUFCEXoJKWg2tk2yK4jV4g2mCxcKgtAqhJAf4T8JwY0aQleWghQRFJM2QRfJpstmVWhrOxioC41SOz2zEMTWXIxn5tO8LxxwZuGMj3P5zscwgk6ne85GQIeMFQMIAAhAAAIQASAAAQhABIAABCAAEQACEIAARAAIQAACEAHgLABGo9H7uVzOp9aPWl9fX9rd3XWrsS2B9wbC4fC9dDodN7MUCoV5URQLvPG2trZezbOYTKa5SCRS5rk9IxtLbNh4fPnCwoKwt7e3eZtFWV5eXl50Op3mnZ2dE954yrLD4Xgky7LE9kGaSsCzs7M/7XZbCgaDTwwsPBGH8ZTUarVPGxsbH3q93nQegUqq1epps9n8xhNxFJ7H43nb7XblqT2F1UDUEk81QF6IWuOpCjhpRAp4qgNOCpEKniaA10WkhKcZ4LiI1PA0Bewjtlqt736///EgosvlupXNZk+o42kOqOTw8PAfRLvd/nAQkSoeCcCLEAVB6FLFIwN4HmIoFFpliHMU8UgBjkLU6/UGqnjkAPuI7Mj7vba2Zh9cL0lSY2VlJUMJTwm5jrRyw4jFYi+G11ut1rv5fF6ktr8GanjDNwyZpf+Z1YzPisXiSwBeoUhOJpNvegMNPWqIJK6B59V5+/v7jYvqxBsNeJki+TLF9o0EvMoMgyqiZoDjTM8UxE6n88Pr9TqoIGoCeJ257cHBQYMSouqA8Xh8cXt7+/V15rajEN1u951MJvN5ZgEVvFQqFZ9EY+B/iDab7YHaiKoBThKPEqIqgDzwqCByB+SJRwGR+7MxpVJp02w2m3i3pEYhsv/ttFwu/5xKQOXZGEmSvoqi+NRoNBp49/OGESuVylEikfg41afw8fHxr3q9/sViscg+n+8d735eH1GW5VYgEHjP+xqo1+G9MbPRzgIgABEAAhCAAEQACEAAAhABIAABCEAEgAAEIAARAAIQgDMb5bUndTaOQDFe/gowAGHdw4mgHwixAAAAAElFTkSuQmCC); }
+  .BNGB3e .MyPUn_ { display: none; }
+}
+@media (orientation: landscape) and (max-width: 767px) {
+  .BNGB3e { display: none; }
+}
+@media (orientation: portrait) and (min-width: 768px) and (max-width: 1024px) {
+  .BNGB3e { width: 75px; height: 75px; top: 15px; right: 15px; }
+  .BNGB3e .MyPUn_ { opacity: .8; width: 35px; height: 35px; top: 15px; right: 15px; }
+}
+@media (orientation: landscape) and (min-width: 768px) {
+  .BNGB3e { width: 45px; height: 45px; top: 15px; right: 15px; }
+  .BNGB3e .MyPUn_ { width: 19px; height: 19px; top: 13px; right: 13px; }
+}
+@media (orientation: portrait) {
+  .IUNMZY .EAex_q { padding: 20px 18px 20px 22px; }
+  .tVi4X8 .EAex_q { padding: 20px 22px 20px 18px; }
+}
+@media (orientation: landscape) {
+  .EAex_q { width: 25px; height: 25px; }
+  .IUNMZY .EAex_q { padding: 10px 9px 10px 11px; }
+  .tVi4X8 .EAex_q { padding: 10px 11px 10px 9px; }
+}
+
 /* Pro-gallery fullscreen view (site.js), measured from Wix's: icons 30px from
    the top, image area 90px from the sides and 80vh - 74px tall, title 68px
    below it; Art Store galleries put the info in a 384px side bar. Colours and

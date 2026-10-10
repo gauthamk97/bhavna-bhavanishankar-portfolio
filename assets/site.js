@@ -33,6 +33,13 @@
     stage.addEventListener('click', function (e) {
       if (e.target.closest('[data-testid="gallery-item-click-action-image-zoom"]')) openZoom(ghosts, current);
     });
+    // Enter or Space on the focused slide opens the zoom too.
+    stage.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-testid="gallery-item-click-action-image-zoom"]')) {
+        e.preventDefault();
+        openZoom(ghosts, current);
+      }
+    });
     show(0);
   }
 
@@ -82,30 +89,37 @@
     }
   }
 
+  // The focusable slide currently shown in a slideshow.
+  function shownSlide(ghosts) {
+    var gallery = ghosts[0].closest('[data-testid="slide-show-gallery"]');
+    return gallery && gallery.querySelector('[data-testid="gallery-item-item"] [data-testid="gallery-item-click-action-image-zoom"]');
+  }
+
   function openZoom(ghosts, start, fromHistory) {
     if (zoom) zoom.close(true);
+    if (variant === 'mobile') return openTouchZoom(ghosts, start, fromHistory);
     var i = start;
-    // Desktop: Wix sizes the image to fit 120px from the sides and leaves 143px
-    // for padding and caption (at least 15px above), never upscaling.
-    var sized = variant === 'desktop';
+    // Wix sizes the image to fit 120px from the sides and leaves 143px for
+    // padding and caption (at least 15px above), never upscaling.
     var box = document.createElement('div');
-    box.className = 'site-zoom' + (sized ? ' site-zoom--sized' : '');
+    box.className = 'site-zoom site-zoom--sized';
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
+    box.tabIndex = 0;
     box.innerHTML =
       '<figure class="site-zoom__figure"><img alt=""><figcaption>' +
       '<div class="site-zoom__title"></div><div class="site-zoom__desc"></div></figcaption></figure>' +
       '<button class="site-zoom__close" aria-label="close"><svg viewBox="0 0 18 18" width="18" height="18">' +
       '<path d="M1.4 0L9 7.6 16.6 0 18 1.4 10.4 9 18 16.6 16.6 18 9 10.4 1.4 18 0 16.6 7.6 9 0 1.4z"/></svg></button>' +
-      '<button class="site-zoom__nav site-zoom__prev" aria-label="previous"><svg viewBox="0 0 18 31" width="18" height="31">' +
-      '<path d="M15.9 0L18 2.1 4.2 15.5 18 28.9 15.9 31 0 15.5z"/></svg></button>' +
       '<button class="site-zoom__nav site-zoom__next" aria-label="next"><svg viewBox="0 0 18 31" width="18" height="31">' +
-      '<path d="M2.1 0L0 2.1l13.8 13.4L0 28.9 2.1 31 18 15.5z"/></svg></button>';
+      '<path d="M2.1 0L0 2.1l13.8 13.4L0 28.9 2.1 31 18 15.5z"/></svg></button>' +
+      '<button class="site-zoom__nav site-zoom__prev" aria-label="previous"><svg viewBox="0 0 18 31" width="18" height="31">' +
+      '<path d="M15.9 0L18 2.1 4.2 15.5 18 28.9 15.9 31 0 15.5z"/></svg></button>';
     var img = box.querySelector('img');
     var figure = box.querySelector('figure');
+    var closeButton = box.querySelector('.site-zoom__close');
 
     function layout() {
-      if (!sized) return;
       var info = JSON.parse(ghosts[i].querySelector('[data-image-info]').getAttribute('data-image-info')).imageData;
       var vw = document.documentElement.clientWidth, vh = window.innerHeight;
       var s = Math.min((vw - 240) / info.width, (vh - 173) / info.height, 1);
@@ -129,32 +143,139 @@
       pushLightbox(ghosts[i].getAttribute('data-item-id'));
     }
     function close(quiet) {
-      document.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', layout);
       box.remove();
       lockZoomScroll(false);
       zoom = null;
       if (!quiet) pushLightbox(null);
-    }
-    function onKey(e) {
-      if (e.key === 'Escape') close();
-      else if (e.key === 'ArrowLeft') go(-1);
-      else if (e.key === 'ArrowRight') go(1);
+      var slide = shownSlide(ghosts);
+      if (slide) slide.focus({ preventScroll: true });
     }
 
-    box.querySelector('.site-zoom__close').addEventListener('click', function () { close(); });
+    // Keys as on Wix: the arrows step while focus is in the zoom, Escape only
+    // closes from the close button, and Enter/Space don't press the controls.
+    box.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft') go(-1);
+      else if (e.key === 'ArrowRight') go(1);
+      else if (e.key === 'Escape' && e.target === closeButton) close();
+      else if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('button')) e.preventDefault();
+    });
+    box.addEventListener('keyup', function (e) {
+      if (e.key === ' ' && e.target.closest('button')) e.preventDefault();
+    });
+    closeButton.addEventListener('click', function () { close(); });
     box.querySelector('.site-zoom__prev').addEventListener('click', function () { go(-1); });
     box.querySelector('.site-zoom__next').addEventListener('click', function () { go(1); });
-    if (!sized) box.addEventListener('click', function (e) { if (e.target === box) close(); });
-    document.addEventListener('keydown', onKey);
     window.addEventListener('resize', layout);
     if (ghosts.length < 2) box.classList.add('site-zoom--single');
     lockZoomScroll(true);
     document.body.appendChild(box);
     render();
     if (!fromHistory) pushLightbox(ghosts[i].getAttribute('data-item-id'));
-    box.querySelector('.site-zoom__close').focus();
+    box.focus({ preventScroll: true });
     zoom = { close: close, ghosts: ghosts, show: function (j) { i = j; render(); } };
+  }
+
+  // Mobile: Wix's full-screen touch zoom (its markup and classes; the styles
+  // are in site.css). Black page, image fitted to the screen, title over a
+  // gradient at the bottom, the outer thirds step, a swipe of over 100px in
+  // under 500ms steps too; no keyboard handling. Each step fades the image out
+  // (.5s), swaps it after 250ms and fades it back in once loaded.
+  function openTouchZoom(ghosts, start, fromHistory) {
+    var i = start, step = 0;
+    var box = document.createElement('div');
+    box.className = 'imageZoomComp c8MB3Z zwdzEv';
+    box.id = 'imageZoomComp';
+    box.setAttribute('data-testid', 'container');
+    var arrow = '<svg viewBox="0 0 180 310" class="EAex_q" tabindex="0" role="button" aria-label="';
+    box.innerHTML =
+      '<div class="UOelX6 vkDW7n"><wow-image id="img_imageZoomComp" class="Qh0lWW "><img alt=""></wow-image></div>' +
+      '<div class="BNGB3e" data-testid="close"><svg viewBox="0 0 180 180" class="MyPUn_" tabindex="0" role="button" ' +
+      'aria-label="close" data-testid="closeIcon"><path d="M5 5 L175 175 M175 5 L5 175"></path></svg></div>' +
+      '<div class="IUNMZY" data-testid="next">' + arrow + 'next" data-testid="nextIcon">' +
+      '<path d="M10 10 L170 161 M170 150 L10 300"></path></svg></div>' +
+      '<div class="tVi4X8" data-testid="prev">' + arrow + 'previous" data-testid="prevIcon">' +
+      '<path d="M170 10 L10 161 M10 150 L170 300"></path></svg></div>';
+    var wrap = box.firstChild, pic = wrap.firstChild, img = pic.firstChild;
+    var caption = null;
+
+    function info() {
+      return JSON.parse(ghosts[i].querySelector('[data-image-info]').getAttribute('data-image-info')).imageData;
+    }
+    function layout() {
+      var d = info();
+      img.style.cssText = 'width: ' + Math.min(box.clientWidth, d.width) + 'px; height: ' +
+        Math.min(box.clientHeight, d.height) + 'px; object-fit: contain; object-position: center center;';
+    }
+    function setItem() {
+      var d = info();
+      wrap.setAttribute('data-testselectedimageindex', i);
+      wrap.style.cssText = 'max-height: ' + d.height + 'px; max-width: ' + d.width + 'px;';
+      pic.style.setProperty('--wix-img-max-width', 'max(' + d.width + 'px, 100%)');
+      layout();
+    }
+    function setImage(token) {
+      img.onload = function () { if (token === step) reveal(); };
+      img.src = itemData(ghosts[i]).src;
+      if (img.complete && img.naturalWidth) reveal();
+    }
+    function reveal() {
+      img.onload = null;
+      void wrap.offsetWidth;  // fade in even when the image is already loaded
+      wrap.classList.remove('vkDW7n');
+      var title = itemData(ghosts[i]).title;
+      if (caption || !title) return;
+      caption = document.createElement('div');
+      caption.className = 'VVx1CG';
+      caption.innerHTML = '<p itemprop="name" class="Tnsweu"></p>';
+      caption.firstChild.textContent = title;
+      wrap.after(caption);
+    }
+    function show(j) {
+      var token = ++step;
+      i = (j + ghosts.length) % ghosts.length;
+      if (caption) { caption.remove(); caption = null; }
+      wrap.classList.add('vkDW7n');
+      setTimeout(function () {
+        if (token !== step) return;
+        setItem();
+        setTimeout(function () { if (token === step) setImage(token); }, 250);
+      }, 250);
+    }
+    function go(d) {
+      show(i + d);
+      pushLightbox(ghosts[i].getAttribute('data-item-id'));
+    }
+    function close(quiet) {
+      step++;
+      window.removeEventListener('resize', layout);
+      box.remove();
+      lockZoomScroll(false);
+      zoom = null;
+      if (!quiet) pushLightbox(null);
+      if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+    }
+
+    box.querySelector('[data-testid="close"]').addEventListener('click', function () { close(); });
+    box.querySelector('[data-testid="next"]').addEventListener('click', function () { go(1); });
+    box.querySelector('[data-testid="prev"]').addEventListener('click', function () { go(-1); });
+    var touch = null;
+    box.addEventListener('touchstart', function (e) {
+      touch = e.touches.length === 1 ? { x: e.touches[0].clientX, t: e.timeStamp } : null;
+    }, { passive: true });
+    box.addEventListener('touchend', function (e) {
+      if (!touch) return;
+      var dx = e.changedTouches[0].clientX - touch.x;
+      if (Math.abs(dx) > 100 && e.timeStamp - touch.t < 500) go(dx < 0 ? 1 : -1);
+      touch = null;
+    });
+    window.addEventListener('resize', layout);
+    lockZoomScroll(true);
+    (document.getElementById('main_MF') || document.body).appendChild(box);
+    setItem();
+    setImage(step);
+    if (!fromHistory) pushLightbox(ghosts[i].getAttribute('data-item-id'));
+    zoom = { close: close, ghosts: ghosts, show: show };
   }
 
   // Back/forward between zoom entries shows that item, or closes the zoom.
@@ -482,7 +603,6 @@
     var comp = root.id.replace(/^pro-gallery-/, '');
     var mobile = variant === 'mobile';
     var side = root.getAttribute('data-pg-info') === 'side';
-    var opener = document.activeElement;
     var openedPgid = new URLSearchParams(location.search).get('pgid');
     var index = start;
     var love = '<span class="fullscreen-social-love-container"><button class="fullscreen-social-love' +
@@ -572,7 +692,6 @@
       blockScroll(false);
       document.title = pageTitle;
       setUrl(openedPgid);  // Wix keeps a deep link's ?pgid= after closing
-      if (opener && opener.focus) opener.focus();
     }
     function go(step) {
       if (track) track.scrollTo({ left: (index + step) * track.clientWidth, behavior: 'smooth' });
@@ -637,7 +756,8 @@
     void wrapper.offsetWidth;
     wrapper.style.transition = 'opacity .8s';
     wrapper.style.opacity = '1';
-    view.focus();
+    // Wix focuses the expand button (desktop) or the view (mobile).
+    (expand || view).focus();
   }
 
   function initProGallery(root) {
