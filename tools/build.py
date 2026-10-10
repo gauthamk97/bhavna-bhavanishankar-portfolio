@@ -221,9 +221,12 @@ def new_item(tpl, old, it, i, box, tbox):
         g = g.replace(a, b)
     g = re.sub(r'(id="pgi[0-9a-f]+_)\d+"', lambda m: f'{m.group(1)}{i}"', g)
     g = re.sub(r'data-idx="\d+"', f'data-idx="{i}"', g)
-    if omd.get("title"):
-        old_t, new_t = html.escape(omd["title"]), html.escape(md.get("title", ""))
-        g = g.replace(f'alt="{old_t}"', f'alt="{new_t}"').replace(f'aria-label="{old_t}"', f'aria-label="{new_t}"')
+    # Wix uses the item's own alt text for the image and its action label
+    # ("image" when there is none).
+    alt = html.escape(md.get("alt", ""))
+    g = re.sub(r'(<img\b[^>]*?\salt=")[^"]*"', lambda m: m.group(1) + alt + '"', g)
+    g = re.sub(r'(data-hook="item-action"[^>]*?\saria-label=")[^"]*"|(\saria-label=")[^"]*("[^>]*data-hook="item-action")',
+               lambda m: (m.group(1) + (alt or "image") + '"') if m.group(1) else (m.group(2) + (alt or "image") + m.group(3)), g)
     fmt = lambda v: ("%g" % round(v, 3))
     g = re.sub(r"\bwidth:" + re.escape(fmt(tw)) + "px", "width:" + fmt(w) + "px", g)
     g = re.sub(r"\bheight:" + re.escape(fmt(th)) + "px", "height:" + fmt(h) + "px", g)
@@ -322,6 +325,20 @@ def sharpen_prerendered(doc):
             return u.group(0).replace(p.group(0), f"/v1/fill/w_{round(int(p.group(1)) * k)},h_{round(int(p.group(2)) * k)}")
         doc = doc[:start] + MEDIA_RE.sub(big, doc[start:end]) + doc[end:]
     return doc
+
+
+SKIP_BUTTON = ('<button id="SKIP_TO_CONTENT_BTN" class="SKIP_TO_CONTENT_BTN BqYkvS has-custom-focus" tabindex="0">'
+               'Skip to Main Content</button>')
+
+
+def add_skip_button(doc):
+    """Wix renders its "Skip to Main Content" button in the browser, after the
+    top-of-page anchor, when the header has something focusable."""
+    header = re.search(r"<header\b.*?</header>", doc, re.S)
+    if not header or not re.search(r"<(?:a\b[^>]*\shref=|button\b|input\b|select\b|textarea\b)", header.group(0)):
+        return doc
+    m = re.search(r'<div id="SCROLL_TO_TOP"[^>]*>.*?</div>', doc, re.S)
+    return doc[:m.end()] + SKIP_BUTTON + doc[m.end():] if m else doc
 
 
 PLAY_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMin slice" viewBox="0 0 36 36">'
@@ -463,6 +480,7 @@ def convert(page, variant, src, data):
     doc = fill_carousels(doc, props, prefix)
     doc = fill_pro_galleries(doc, galleries)
     doc = sharpen_prerendered(doc)
+    doc = add_skip_button(doc)
 
     # Swap blurred gallery placeholders for full-size images.
     doc = upgrade_lqip(doc)

@@ -200,10 +200,12 @@
   .tVi4X8 .EAex_q { padding: 10px 11px 10px 9px; }
 }
 
-/* Pro-gallery fullscreen view (site.js), measured from Wix's: icons 30px from
-   the top, image area 90px from the sides and 80vh - 74px tall, title 68px
-   below it; Art Store galleries put the info in a 384px side bar. Colours and
-   title fonts come from Wix's per-gallery rules in the page. */
+/* Pro-gallery fullscreen view (site.js), with Wix's layout: a flex column of
+   the icon bar (30px from the top), the image area (full height, the image
+   fitted into the top 80vh - 74px, 90px from the sides) and a 700px title box
+   (20vh, 40px top padding) that both shrink to fit the screen; Art Store
+   galleries put the info in a 384px side bar. Colours and title fonts come
+   from Wix's per-gallery rules in the page. */
 @font-face {
   font-family: progallery-svg-font-icons;
   font-style: normal;
@@ -261,6 +263,15 @@
   margin: 5px 0 0 -3px;
   font: normal 16px/18px "HelveticaNeueW01-45Ligh", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
+.site-pgfs__view:not(.site-pgfs--mobile):not(.site-pgfs--side) { display: flex; flex-direction: column; }
+.site-pgfs__view:not(.site-pgfs--mobile):not(.site-pgfs--side) .site-pgfs__bar {
+  position: relative;
+  top: auto;
+  flex: 0 1 auto;
+  margin-top: 30px;
+}
+.site-pgfs__expand { flex: 0 1 auto; height: 100%; overflow: hidden; }
+.site-pgfs__expand .site-pgfs__stage { position: relative; inset: auto; margin: 0 90px; height: calc(80vh - 74px); }
 .site-pgfs__stage {
   position: absolute;
   top: 74px;
@@ -271,8 +282,7 @@
 .site-pgfs__stage img {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  margin: auto;
   object-fit: contain;
   transition: opacity .2s;
 }
@@ -291,44 +301,58 @@
 .site-pgfs__prev svg { transform: scaleX(-1); }
 .site-pgfs__next { right: 20px; }
 .site-pgfs__info {
-  position: absolute;
-  top: calc(80vh + 68px);
-  left: 50%;
+  position: relative;
+  flex: 0 1 auto;
+  box-sizing: border-box;
+  left: calc(50% - 350px);
   width: 700px;
-  max-width: calc(100% - 40px);
-  max-height: 200px;
-  overflow-y: auto;
-  transform: translateX(-50%);
+  height: 20vh;
+  padding: 40px 0 5px;
   text-align: center;
   overflow-wrap: break-word;
 }
+.site-pgfs__info .fullscreen-side-bar-info-container { height: 100%; max-height: 200px; overflow: hidden auto; }
 .site-pgfs .fullscreen-side-bar-title h1 { margin: 0; font: inherit; color: inherit; }
 .site-pgfs--side:not(.site-pgfs--mobile) .site-pgfs__stage { right: 474px; height: auto; bottom: 74px; }
 .site-pgfs--side:not(.site-pgfs--mobile) .site-pgfs__arrow { top: calc(50% - 25px); }
 .site-pgfs--side:not(.site-pgfs--mobile) .site-pgfs__next { right: 404px; }
 .site-pgfs--side:not(.site-pgfs--mobile) .site-pgfs__info {
+  position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
   left: auto;
   width: 384px;
-  max-width: none;
-  max-height: none;
+  height: auto;
   padding: 97px 95px 0 5px;
-  box-sizing: border-box;
-  transform: none;
   text-align: left;
 }
+.site-pgfs--side .site-pgfs__info .fullscreen-side-bar-info-container { height: auto; max-height: none; overflow: visible; }
 
 /* Mobile: back arrow and love in a 60px top bar, items swipe sideways with the
    title under the image. */
 .site-pgfs--mobile .site-pgfs__bar { top: 0; height: 60px; }
 .site-pgfs--mobile .fullscreen-close { width: 60px; height: 60px; font-size: 20px; line-height: 60px; }
 .site-pgfs--mobile .fullscreen-social { padding: 0 5px 0 0; }
-.site-pgfs--mobile .fullscreen-social-love-container { width: 60px; height: 60px; margin: 0; }
-.site-pgfs--mobile .fullscreen-social-love { width: 34px; height: 60px; }
-.site-pgfs--mobile .fullscreen-social-love svg { top: 18px; left: 11px; width: 23px; }
-.site-pgfs--mobile .fullscreen-social-love-count { margin: 18px 0 0 4px; font-size: 18px; line-height: 20px; }
+.site-pgfs--mobile .fullscreen-social-love-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  margin: 0;
+}
+.site-pgfs--mobile .fullscreen-social-love { width: 23px; height: 20px; }
+.site-pgfs--mobile .fullscreen-social-love svg { top: -2px; left: 0; width: 23px; }
+.site-pgfs--mobile .fullscreen-social-love-count {
+  position: absolute;
+  top: 18px;
+  left: 45.5px;
+  margin: 0;
+  font-size: 18px;
+  line-height: 20px;
+}
 .site-pgfs__track {
   position: absolute;
   top: 60px;
@@ -348,20 +372,25 @@
   scroll-snap-align: start;
   scroll-snap-stop: always;
 }
+/* Images fit the width (never enlarged, no height limit), as on Wix. */
 .site-pgfs__slide img {
   display: block;
-  width: 100%;
+  max-width: 100%;
   height: auto;
-  max-height: calc(100% - 200px);
-  object-fit: contain;
+  margin: 0 auto;
 }
 .site-pgfs__slide .site-pgfs__info {
   position: static;
+  left: auto;
   width: auto;
-  max-width: none;
-  max-height: none;
+  height: auto;
+  padding: 0;
   margin: 20px 20px 14px;
-  transform: none;
   background: none;
 }
+.site-pgfs__slide .fullscreen-side-bar-info-container { height: auto; max-height: none; overflow: visible; }
 .site-pgfs--side .site-pgfs__slide .site-pgfs__info { text-align: left; }
+
+/* Loved state of the love button in the gallery item hover (as in the
+   fullscreen view). */
+.pro-gallery .gallery-item-hover .info-element-social-love.info-element-loved { color: #e03939 !important; }

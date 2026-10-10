@@ -354,7 +354,7 @@
     }
   }
 
-  // Image-button tooltip (desktop): Wix shows the button's label in a black
+  // Image-button tooltip: Wix shows the button's label in a black
   // box above it 2s after the pointer enters (or it gets focus) and removes it
   // as soon as the pointer leaves (or focus moves away).
   function initTooltip(root) {
@@ -386,18 +386,81 @@
     link.addEventListener('blur', stop);
   }
 
-  // Same-page anchor links (and Wix's "Up" button) scroll smoothly, like on Wix.
+  // Wix's animated scroll: easeInOutSine over a duration that grows with the
+  // distance (Wix's desktop/mobile tables, seconds by pixels); a wheel or
+  // touch move aborts it.
+  var SCROLL_TIMES = {
+    desktop: [[0, .6], [360, .8], [720, 1], [1440, 1.2], [7200, 2.8], [9600, 3], [1e4, 3]],
+    mobile: [[0, .5], [360, .7], [720, .9], [1440, 1.1], [7200, 2.7], [9600, 2.9], [1e4, 2.9]]
+  };
+  function scrollDuration(distance) {
+    var t = SCROLL_TIMES[variant === 'mobile' ? 'mobile' : 'desktop'], k = 0;
+    while (k < t.length - 2 && distance > t[k + 1][0]) k++;
+    return 1000 * ((t[k + 1][1] - t[k][1]) / (t[k + 1][0] - t[k][0]) * (distance - t[k][0]) + t[k][1]);
+  }
+  function animatedScrollTo(target, done) {
+    var from = window.scrollY, duration = scrollDuration(Math.abs(target - from)), start = performance.now();
+    var aborted = false;
+    function listen(on) {
+      var method = on ? 'addEventListener' : 'removeEventListener';
+      window[method]('wheel', abort, { passive: true });
+      window[method]('touchmove', abort, { passive: true });
+    }
+    function abort() {
+      aborted = true;
+      listen(false);
+    }
+    listen(true);
+    requestAnimationFrame(function step(now) {
+      if (aborted) return;
+      var elapsed = now - start, p = Math.min(elapsed / duration, 1);
+      window.scrollTo(0, from + -(Math.cos(Math.PI * p) - 1) / 2 * (target - from));
+      if (elapsed < duration) return requestAnimationFrame(step);
+      window.scrollTo(0, target);
+      listen(false);
+      done();
+    });
+  }
+  function docTop(el) {
+    return el.getBoundingClientRect().top - document.body.getBoundingClientRect().top;
+  }
+
+  // Same-page anchor links (and Wix's "Up" button) scroll with Wix's animation,
+  // then focus the target (the page's first section for "Up"), labelled
+  // "main content" as Wix does.
   function initAnchors() {
     document.addEventListener('click', function (e) {
       var a = e.target.closest && e.target.closest('a[data-anchor]');
       if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       var href = a.getAttribute('href') || '';
-      var target = a.getAttribute('data-anchor') === 'SCROLL_TO_TOP' ? document.documentElement
-        : href.charAt(0) === '#' && document.getElementById(decodeURIComponent(href.slice(1)));
+      var top = a.getAttribute('data-anchor') === 'SCROLL_TO_TOP';
+      var target = top ? document.getElementById('SCROLL_TO_TOP')
+        : document.getElementById(a.getAttribute('data-anchor-comp-id') || '') ||
+          (href.charAt(0) === '#' && document.getElementById(decodeURIComponent(href.slice(1))));
       if (!target) return;
       e.preventDefault();
-      if (target === document.documentElement) window.scrollTo({ top: 0, behavior: 'smooth' });
-      else target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Wix starts two frames after the click, measuring the target then.
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          animatedScrollTo(docTop(target), function () {
+            var y = docTop(target);
+            if (Math.abs(window.scrollY - y) > .5) window.scrollTo(0, y);
+            var focus = top && document.querySelector('main section') || target;
+            focus.setAttribute('tabindex', '-1');
+            focus.setAttribute('aria-label', 'main content');
+            focus.focus({ preventScroll: true });
+          });
+        });
+      });
+    });
+  }
+
+  // Wix's "Skip to Main Content" button focuses the page content.
+  function initSkip(button) {
+    button.addEventListener('click', function () {
+      var main = document.querySelector('[data-main-content]') ||
+        document.querySelector('[data-main-content-parent]>section:first-of-type');
+      if (main) main.focus();
     });
   }
 
@@ -427,7 +490,7 @@
     function close() {
       slot.innerHTML = '';
       nav.classList.remove('kgNViD');
-      button.removeAttribute('aria-expanded');
+      button.setAttribute('aria-expanded', 'false');
       button.querySelector('svg').setAttribute('preserveAspectRatio', 'none');
       blockScroll(false);
     }
@@ -479,19 +542,23 @@
     var moving = false;
 
     function maxScroll() { return scroller.scrollWidth - scroller.clientWidth; }
+    // As on Wix: the current item is the last one starting left of the view's
+    // centre; Previous hides on the first item or at the start, Next on the
+    // last item or at the end.
     function update() {
-      back.style.display = scroller.scrollLeft > 1 ? '' : 'none';
-      next.style.display = scroller.scrollLeft < maxScroll() - 1 ? '' : 'none';
+      var i = current();
+      back.style.display = i > 0 && scroller.scrollLeft >= 1 ? '' : 'none';
+      next.style.display = i < items.length - 1 && scroller.scrollLeft < maxScroll() - 1 ? '' : 'none';
+    }
+    function left(item) {
+      return item.getBoundingClientRect().left - scroller.getBoundingClientRect().left + scroller.scrollLeft;
     }
     function center(item) {
-      var r = item.getBoundingClientRect();
-      return r.left - scroller.getBoundingClientRect().left + scroller.scrollLeft + r.width / 2;
+      return left(item) + item.getBoundingClientRect().width / 2;
     }
     function current() {
       var mid = scroller.scrollLeft + scroller.clientWidth / 2, best = 0;
-      items.forEach(function (item, i) {
-        if (Math.abs(center(item) - mid) < Math.abs(center(items[best]) - mid)) best = i;
-      });
+      items.forEach(function (item, i) { if (left(item) <= mid) best = i; });
       return best;
     }
     function go(step) {
@@ -526,6 +593,74 @@
     update();
   }
 
+  // Wix's mobile pro-gallery scales its spacing by 320 / screen width (the
+  // server renders for a 320px screen) and re-lays the items out: slider
+  // items keep their size inside floor(size + 2 * margin) boxes, stacked grid
+  // items grow to fill ceil(size + spacing) steps.
+  function mobileScale() {
+    if (variant !== 'mobile') return 1;
+    var landscape = window.matchMedia && matchMedia('(orientation: landscape)').matches;
+    var w = landscape ? Math.max(screen.width, screen.height) : screen.width;
+    return w ? 320 / w : 1;
+  }
+  function px(v) { return parseFloat(v) || 0; }
+  function sizeAll(el, sel, w, h) {
+    [].forEach.call(el.querySelectorAll(sel), function (e) {
+      e.style.width = w + 'px';
+      e.style.height = h + 'px';
+    });
+  }
+  function rescaleMobile(root) {
+    var r = mobileScale();
+    var items = [].slice.call(root.querySelectorAll('[data-hook="item-container"]'));
+    // Only Wix Pro Gallery widgets (not the Albums widget) do this.
+    if (r === 1 || !items.length || !root.hasAttribute('data-pg-fullscreen')) return;
+    var inner = '[data-hook="item-wrapper"], [data-hook="image-item"], [data-hook="gallery-item-image-img"]';
+    var parent = root.querySelector('.pro-gallery-parent-container');
+    var container = root.querySelector('[id^="pro-gallery-container-"]');
+    var scroller = root.querySelector('.gallery-horizontal-scroll');
+    if (scroller && parent) {
+      var m0 = px(items[0].style.margin), m = m0 * r, W = px(parent.style.width), H = px(parent.style.height);
+      var x = 0, h = Math.floor(H + 2 * m) - 2 * m;
+      if (!m0) return;
+      parent.style.margin = -m + 'px';
+      [container, scroller].forEach(function (el) {
+        el.style.width = Math.ceil(W + 2 * m) + 'px';
+        el.style.height = Math.floor(H + m) + 'px';
+      });
+      items.forEach(function (it) {
+        var outer = Math.floor(px(it.style.width) + 2 * m), group = it.closest('[data-hook="group-view"]');
+        if (group) {
+          group.style.setProperty('--group-left', x + 'px');
+          group.style.setProperty('--group-width', outer + 'px');
+        }
+        it.style.margin = m + 'px';
+        it.style.left = x + 'px';
+        it.style.width = outer - 2 * m + 'px';
+        it.style.height = h + 'px';
+        sizeAll(it, inner, outer - 2 * m, h);
+        x += outer;
+      });
+      [].forEach.call(root.querySelectorAll('[data-hook^="nav-arrow"]'), function (a) {
+        a.style.right = px(a.style.right) - m0 + m + 'px';
+        a.style.top = 'calc(50% + ' + m / 2 + 'px - ' + px(a.style.height) / 2 + 'px - 0px)';
+      });
+      return;
+    }
+    // One-column grid: items stacked with a spacing between them.
+    if (items.length < 2 || px(items[1].style.left) !== px(items[0].style.left)) return;
+    var gap = px(items[1].style.top) - px(items[0].style.top) - px(items[0].style.height), s = gap * r, y = 0;
+    items.forEach(function (it) {
+      var step = Math.ceil(px(it.style.height) + s), size = step - s;
+      it.style.top = y + 'px';
+      it.style.width = size + 'px';
+      it.style.height = size + 'px';
+      sizeAll(it, inner, size, size);
+      y += step;
+    });
+    if (container) container.style.height = y - s + 'px';
+  }
+
   // Galleries Wix lays out only in the browser (server HTML hides the items):
   // fit the columns to the real width, keeping Wix's gaps and info height.
   function initPrerendered(root) {
@@ -533,7 +668,6 @@
     if (!pre) return;
     var items = [].slice.call(root.querySelectorAll('[data-hook="item-container"]'));
     if (!items.length) return;
-    var px = function (v) { return parseFloat(v) || 0; };
     var boxes = items.map(function (it) {
       var wrap = it.querySelector('[data-hook="item-wrapper"]');
       return { left: px(it.style.left), top: px(it.style.top), w: px(it.style.width), h: px(it.style.height),
@@ -606,25 +740,27 @@
     var openedPgid = new URLSearchParams(location.search).get('pgid');
     var index = start;
     var love = '<span class="fullscreen-social-love-container"><button class="fullscreen-social-love' +
-      (mobile ? '' : ' fullscreen-icon') + '" role="checkbox" aria-checked="false" title="Love">' +
+      (mobile ? '' : ' fullscreen-icon') + ' has-custom-focus" role="checkbox" aria-checked="false" title="Love">' +
       '<svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path fill-rule="evenodd"></path></svg>' +
       '</button><i class="fullscreen-social-love-count"></i></span>';
     var bar = mobile
       ? '<div class="fullscreen-mobile-bar site-pgfs__bar"><button class="fullscreen-close progallery-svg-font-icons-back" ' +
         'aria-label="Exit expand mode"></button><div class="fullscreen-social">' + love + '</div></div>'
-      : '<div class="site-pgfs__bar"><div class="fullscreen-social"><button class="fullscreen-icon fullscreen-expand ' +
+      : '<div class="site-pgfs__bar"><div class="fullscreen-social"><button class="fullscreen-icon has-custom-focus fullscreen-expand ' +
         'progallery-svg-font-icons-expand-arrow" title="Open in fullscreen"></button>' + love + '</div>' +
         '<div class="fullscreen-nav"><button class="fullscreen-icon fullscreen-close progallery-svg-font-icons-close-x" ' +
         'aria-label="Exit expand mode"></button></div></div>';
     var info = function (title) {
       return '<div class="site-pgfs__info' + (side && !mobile ? ' fullscreen-side-bar' : '') + '">' +
-        '<div class="fullscreen-side-bar-title"><h1>' + title + '</h1></div></div>';
+        '<div class="fullscreen-side-bar-info-container"><div class="fullscreen-side-bar-title"><h1>' + title +
+        '</h1></div></div></div>';
     };
     var body = mobile
       ? '<div class="site-pgfs__track">' + items.map(function (it) {
           return '<div class="site-pgfs__slide"><img alt=""><div class="site-pgfs__slide-info">' + info('') + '</div></div>';
         }).join('') + '</div>'
-      : '<div class="site-pgfs__stage"></div>' + info('') +
+      : (side ? '<div class="site-pgfs__stage"></div>' : '<div class="site-pgfs__expand"><div class="site-pgfs__stage"></div></div>') +
+        info('') +
         '<button class="fullscreen-icon site-pgfs__arrow site-pgfs__prev" aria-label="Previous Item">' + ARROW_SVG + '</button>' +
         '<button class="fullscreen-icon site-pgfs__arrow site-pgfs__next" aria-label="Next Item">' + ARROW_SVG + '</button>';
     var host = document.createElement('div');
@@ -644,8 +780,19 @@
     var nextBtn = view.querySelector('.site-pgfs__next');
 
     function data(i) {
+      var img = items[i].querySelector('img');
       return { id: items[i].getAttribute('data-id'), title: items[i].getAttribute('data-title') || '',
-               src: items[i].getAttribute('data-full') };
+               src: items[i].getAttribute('data-full'), alt: img ? img.alt : '',
+               w: +items[i].getAttribute('data-w'), h: +items[i].getAttribute('data-h') };
+    }
+    // Wix fits the image into the stage without ever enlarging it.
+    function fit(img, i) {
+      var d = data(i), k = Math.min(stage.clientWidth / d.w, stage.clientHeight / d.h, 1);
+      img.style.width = d.w * k + 'px';
+      img.style.height = d.h * k + 'px';
+    }
+    function refit() {
+      [].forEach.call(stage.querySelectorAll('img'), function (img) { fit(img, +img.getAttribute('data-index')); });
     }
     function renderLove() {
       var loved = !!storedLoves()[data(index).id];
@@ -669,8 +816,9 @@
     function show(i, fade) {
       if (i < 0 || i >= items.length) return;
       var d = data(i), img = document.createElement('img');
-      img.alt = d.title;
+      img.alt = d.alt;
       img.src = d.src;
+      img.setAttribute('data-index', i);
       if (fade) {
         img.style.opacity = '0';
         img.addEventListener('transitionend', function () {
@@ -680,6 +828,7 @@
         stage.innerHTML = '';
       }
       stage.appendChild(img);
+      fit(img, i);
       if (fade) { void img.offsetWidth; img.style.opacity = '1'; }
       view.querySelector('.site-pgfs__info h1').textContent = d.title;
       select(i);
@@ -687,6 +836,7 @@
     function close() {
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('fullscreenchange', onFullscreen);
+      window.removeEventListener('resize', refit);
       if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
       host.remove();
       blockScroll(false);
@@ -729,6 +879,7 @@
       nextBtn.addEventListener('click', function () { go(1); });
     }
     document.addEventListener('keydown', onKey);
+    if (stage) window.addEventListener('resize', refit);
 
     blockScroll(true);
     wrapper.style.opacity = '0';
@@ -736,8 +887,9 @@
     if (track) {
       [].forEach.call(track.children, function (slide, i) {
         var d = data(i), img = slide.querySelector('img');
-        img.alt = d.title;
+        img.alt = d.alt;
         img.src = d.src;
+        img.style.width = d.w + 'px';  // never enlarged; CSS caps it at the screen width
         slide.querySelector('h1').textContent = d.title;
       });
       track.scrollLeft = start * track.clientWidth;
@@ -760,9 +912,149 @@
     (expand || view).focus();
   }
 
+  // Desktop item hover, as Wix renders it on the first hover and then keeps:
+  // a tinted overlay with a love button (Art Store galleries: title, "Buy Now",
+  // love and share; album galleries: an empty social row).
+  var SHARE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M14.5,14 C14.628,14 14.752,14.049 14.845,14.138 C14.944,14.232 15,14.363 15,14.5 L15,17.293 L20.293,12 L15,6.707 L15,9.5 C15,9.633 14.947,9.761 14.853,9.854 C14.759,9.947 14.632,10 14.5,10 C14.494,9.998 14.491,10 14.486,10 C13.667,10 7.407,10.222 4.606,16.837 C7.276,14.751 10.496,13.795 14.188,13.989 C14.324,13.996 14.426,14.001 14.476,14.001 C14.484,14 14.492,14 14.5,14 M3.5,19 C3.414,19 3.328,18.979 3.25,18.933 C3.052,18.819 2.957,18.585 3.019,18.365 C5.304,10.189 11.981,9.145 14,9.017 L14,5.5 C14,5.298 14.122,5.115 14.309,5.038 C14.496,4.963 14.71,5.004 14.854,5.146 L21.354,11.646 C21.549,11.842 21.549,12.158 21.354,12.354 L14.854,18.854 C14.71,18.997 14.495,19.038 14.309,18.962 C14.122,18.885 14,18.702 14,18.5 L14,14.981 C9.957,14.791 6.545,16.102 3.857,18.85 C3.761,18.948 3.631,19 3.5,19" fill-rule="evenodd"></path></svg>';
+  var SHARE_NETWORKS = [
+    ['facebook', '0 0 8 17', 'M 7.21 0.91C 7.21 1.79 7.21 3.38 7.21 3.38 7.21 3.38 5.38 3.19 4.92 3.89 4.67 4.27 4.82 5.39 4.8 6.19 5.6 6.19 6.42 6.19 7.22 6.19 7.02 7.12 6.87 7.76 6.72 8.57 6.03 8.57 4.79 8.57 4.79 8.57 4.79 8.57 4.79 16.23 4.79 16.23 4.79 16.23 2.5 16.23 1.43 16.23 1.43 13.87 1.43 11.11 1.43 8.6 0.9 8.6 0.52 8.6-0 8.6-0 7.71-0 7.07-0 6.19 0.5 6.19 0.9 6.19 1.41 6.19 1.48 4.42 1.51 2.68 2.39 1.79 3.38 0.79 4.32 0.91 7.21 0.91Z'],
+    ['twitter', '0 0 16 13', 'M 15.99 1.6C 15.91 2.19 15.04 2.79 14.51 3.23 15.03 10.77 6.33 15.48 0.01 11.66 1.78 11.67 3.78 11.19 4.83 10.21 3.3 9.96 2.21 9.28 1.79 7.94 2.24 7.9 2.87 8.04 3.17 7.85 1.77 7.33 0.66 6.52 0.59 4.68 1.09 4.73 1.35 5.02 1.97 4.95 1.06 4.38 0.03 2.21 0.96 0.61 2.61 2.4 4.66 3.79 7.87 4.05 7.08 0.72 11.57-1.34 13.59 1.06 14.38 0.89 15.04 0.61 15.71 0.33 15.44 1.09 14.88 1.57 14.33 2.06 14.92 1.95 15.55 1.87 15.99 1.6Z'],
+    ['pinterest', '0 0 15 15', 'M 7.5 0.01C 3.36 0.01 0 3.37 0 7.5 0 10.69 1.99 13.4 4.79 14.49 4.74 14.01 4.69 13.04 4.83 12.44 4.97 11.85 5.73 8.65 5.73 8.65 5.73 8.65 5.5 8.19 5.5 7.52 5.5 6.46 6.11 5.66 6.88 5.66 7.53 5.66 7.85 6.15 7.85 6.74 7.85 7.39 7.43 8.37 7.21 9.28 7.03 10.04 7.6 10.66 8.34 10.66 9.7 10.66 10.74 9.23 10.74 7.16 10.74 5.34 9.43 4.06 7.56 4.06 5.38 4.06 4.11 5.69 4.11 7.37 4.11 8.03 4.36 8.73 4.68 9.11 4.74 9.19 4.75 9.25 4.73 9.33 4.67 9.57 4.54 10.09 4.52 10.2 4.48 10.34 4.41 10.37 4.26 10.3 3.31 9.86 2.71 8.46 2.71 7.34 2.71 4.93 4.46 2.72 7.76 2.72 10.4 2.72 12.46 4.61 12.46 7.13 12.46 9.76 10.8 11.88 8.5 11.88 7.73 11.88 7 11.48 6.75 11 6.75 11 6.37 12.46 6.28 12.82 6.12 13.43 5.71 14.19 5.4 14.7 6.07 14.89 6.77 15 7.5 15 11.64 15 14.99 11.64 14.99 7.5 14.99 3.37 11.64 0.01 7.5 0.01Z'],
+    ['tumblr', '0 0 8 15', 'M 7.99 6.38C 7.99 6.38 5 6.38 5 6.38 5 6.38 5 10.53 5 10.53 5 11.28 5.09 11.7 6.09 11.7 6.09 11.7 7.99 11.7 7.99 11.7 7.99 11.7 7.99 14.89 7.99 14.89 7.99 14.89 6.99 15 5.89 15 3.3 15 2 13.29 2 11.38 2 11.38 2 6.38 2 6.38 2 6.38 0.01 6.38 0.01 6.38 0.01 6.38 0.01 3.41 0.01 3.41 2.4 3.2 2.6 1.28 2.8 0 2.8 0 5 0 5 0 5 0 5 3.2 5 3.2 5 3.2 7.99 3.2 7.99 3.2 7.99 3.2 7.99 6.38 7.99 6.38Z'],
+    ['email', '0 0 17 13', 'M 16.48 0.01C 16.48 0.01 16.11 0.01 16.11 0.01 16.11 0.01 16.11-0 16.11-0 16.11-0 16.1 0.01 16.1 0.01 16.1 0.01 0.96 0.01 0.96 0.01 0.96 0.01 0.95-0 0.95-0 0.95-0 0.94 0.01 0.94 0.01 0.94 0.01 0.52 0.01 0.52 0.01 0.23 0.01 0 0.25 0 0.55 0 0.55 0 12.46 0 12.46 0 12.76 0.23 13 0.52 13 0.52 13 16.48 13 16.48 13 16.77 13 17 12.76 17 12.46 17 12.46 17 0.55 17 0.55 17 0.25 16.77 0.01 16.48 0.01ZM 6.23 5.83C 6.23 5.83 1.05 11.15 1.05 11.15 1.05 11.15 1.05 1.47 1.05 1.47 1.05 1.47 6.23 5.83 6.23 5.83ZM 7.05 6.51C 7.05 6.51 8.2 7.48 8.2 7.48 8.3 7.56 8.41 7.6 8.53 7.6 8.65 7.6 8.76 7.56 8.86 7.48 8.86 7.48 10.01 6.51 10.01 6.51 10.01 6.51 15.28 11.92 15.28 11.92 15.28 11.92 1.78 11.92 1.78 11.92 1.78 11.92 7.05 6.51 7.05 6.51ZM 10.83 5.83C 10.83 5.83 15.95 1.52 15.95 1.52 15.95 1.52 15.95 11.09 15.95 11.09 15.95 11.09 10.83 5.83 10.83 5.83ZM 14.81 1.09C 14.81 1.09 8.53 6.36 8.53 6.36 8.53 6.36 2.25 1.09 2.25 1.09 2.25 1.09 14.81 1.09 14.81 1.09Z']
+  ];
+
+  function hoverMarkup(root, item) {
+    var store = root.getAttribute('data-pg-info') === 'side';
+    var love = function (attrs) {
+      return '<span class="info-member info-element-social-love info-element-social-button" data-hook="love-button" ' + attrs +
+        ' aria-label="Love"><button data-hook="love-icon" class="info-element-social-love love_empty" tabindex="-1">' +
+        '<svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="' + HEART_HOLE + HEART_FILLED +
+        '" fill-rule="evenodd"></path></svg></button></span>';
+    };
+    var social;
+    if (root.querySelector('.gallery-item-common-info-outer')) {
+      social = '<div class="info-element-social info-align-center vertical-item text-external-item info-element-social-absolute" data-hook="item-social"></div>';
+    } else if (store) {
+      var title = document.createElement('span');
+      title.textContent = item.getAttribute('data-title') || '';
+      social = '<div class="info-element-text" dir="auto" style="align-items: center; text-align: center; display: flex; ' +
+        'place-content: center; padding-bottom: 70px; direction: ltr;"><div><div class="info-member info-element-title" ' +
+        'data-hook="item-title" style="overflow: hidden; margin-bottom: 16px; visibility: inherit; -webkit-line-clamp: none;">' +
+        title.outerHTML + '</div><div class="info-member info-element-custom-button-wrapper" data-hook="custom-button-wrapper" ' +
+        'style="justify-content: center; z-index: 17; visibility: inherit;"><button data-hook="custom-button-button" ' +
+        'class="info-element-custom-button-button" tabindex="-1" style="cursor: inherit;">Buy Now<div class="overlay"></div>' +
+        '</button></div></div></div><div class="info-element-social info-align-center vertical-item populated-item ' +
+        'info-element-social-absolute" data-hook="item-social">' + love('tabindex="-1" role="checkbox"') +
+        '<div class="info-member info-element-social-share info-element-social-button" data-hook="info-element-social-button">' +
+        '<i class="share-store">' + SHARE_SVG + '</i></div></div><div data-hook="social-share-box" class="info-member ' +
+        'info-element-social-share-box  hidden  vertical-item " tabindex="-1" aria-label="Share" role="menu" ' +
+        'style="transform: translateY(-50%);">' + SHARE_NETWORKS.map(function (n, k) {
+          return '<button class="has-custom-focus network-' + (k + 1) + '" data-hook="' + n[0] + '-share-button" title="Share on ' +
+            n[0] + '" aria-live="assertive" role="menuitem" tabindex="-1" style="top: calc(' +
+            +(100 * (k + 1) / 6).toFixed(4) + '% - 10px);"><svg viewBox="' + n[1] + '" fill="currentColor" width="18" height="18">' +
+            '<path d="' + n[2] + '" fill="currentColor"></path></svg></button>';
+        }).join('') + '</div>';
+    } else {
+      social = '<div class="info-element-social info-align-center populated-item info-element-social-absolute" data-hook="item-social">' +
+        love('tabindex="0" role="checkbox" aria-checked="false"') + '</div>';
+    }
+    return '<div class="gallery-item-hover-inner"><div data-hook="info-element" style="height: 100%; width: 100%;">' +
+      '<div class="hover-info-element" data-hook="hover-info-element" style="height: 100%; box-sizing: border-box; padding: 0px;">' +
+      social + '</div></div></div>';
+  }
+
+  function renderItemLove(item) {
+    var span = item.querySelector('[data-hook="love-button"]');
+    if (!span) return;
+    var loved = !!storedLoves()[item.getAttribute('data-id')];
+    var button = span.querySelector('button');
+    button.className = 'info-element-social-love ' + (loved ? 'love_full info-element-loved' : 'love_empty');
+    if (span.hasAttribute('aria-checked')) span.setAttribute('aria-checked', String(loved));
+    button.querySelector('path').setAttribute('d', loved ? HEART_FILLED : HEART_HOLE + HEART_FILLED);
+  }
+
+  function initHover(root) {
+    if (variant !== 'desktop') return;
+    [].forEach.call(root.querySelectorAll('[data-hook="item-container"]'), function (item) {
+      var content = item.querySelector('[data-hook="image-item"]');
+      var wrapper = item.querySelector('[data-hook="item-wrapper"]');
+      if (!content || !wrapper) return;
+      function hover(on) {
+        var overlay = item.querySelector('.gallery-item-hover');
+        if (on && !overlay) {
+          var flex = document.createElement('div');
+          flex.className = 'item-hover-flex-container';
+          flex.style.cssText = 'width: ' + content.style.width + '; height: ' + content.style.height + '; margin-top: 0px; ' +
+            'margin-left: 0px; display: flex; position: absolute; top: 0px; left: 0px; align-items: flex-end;';
+          flex.innerHTML = '<div data-hook="item-hover-' + item.getAttribute('data-idx') + '"' +
+            (root.getAttribute('data-pg-info') === 'side' ? ' aria-hidden="true"' : '') +
+            ' class="gallery-item-hover fullscreen-enabled" style="width: ' + content.style.width + '; height: ' +
+            content.style.height + '; margin: 0px; position: relative;"></div>';
+          content.after(flex);
+          overlay = flex.firstChild;
+        }
+        if (on && !overlay.firstChild) {
+          overlay.innerHTML = hoverMarkup(root, item);
+          renderItemLove(item);
+        }
+        // Classes swap in place, as in Wix's markup.
+        item.className = item.className.replace(on ? 'item-container-regular' : 'item-container-hover',
+          on ? 'item-container-hover' : 'item-container-regular').replace(on ? /\bclickable\b/ : / simulate-hover\b/,
+          on ? 'clickable simulate-hover' : '');
+        content.className = content.className.replace(on ? 'item-content-regular' : 'item-content-hover',
+          on ? 'item-content-hover' : 'item-content-regular');
+        if (overlay) {
+          overlay.classList.toggle('item-overlay-regular', !on);
+          overlay.classList.toggle('force-hover', on);
+          overlay.classList.toggle('item-overlay-hover', on);
+        }
+      }
+      item.addEventListener('mouseenter', function () { hover(true); });
+      item.addEventListener('mouseleave', function () { hover(false); });
+      // The love button keeps a local state (shared with the fullscreen view);
+      // the share button opens Wix's share box.
+      function toggleLove() {
+        var loves = storedLoves(), id = item.getAttribute('data-id');
+        if (loves[id]) delete loves[id]; else loves[id] = 1;
+        try { localStorage.setItem(LOVES_KEY, JSON.stringify(loves)); } catch (err) { /* not persisted */ }
+        renderItemLove(item);
+      }
+      item.addEventListener('click', function (e) {
+        var love = e.target.closest('[data-hook="love-button"]');
+        var share = e.target.closest('[data-hook="info-element-social-button"]');
+        if (!love && !share) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (love) return toggleLove();
+        var box = item.querySelector('[data-hook="social-share-box"]');
+        if (box) box.classList.toggle('hidden');
+      }, true);
+      item.addEventListener('keydown', function (e) {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-hook="love-button"]')) {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleLove();
+        }
+      }, true);
+    });
+  }
+
+  // Wix marks "load with color" items once their image has loaded.
+  function markLoaded(root) {
+    [].forEach.call(root.querySelectorAll('.load-with-color[data-hook="image-item"]'), function (content) {
+      var img = content.querySelector('img');
+      function done() { content.className = content.className.replace('load-with-color  ', 'load-with-color image-loaded '); }
+      if (!img || img.complete) done(); else img.addEventListener('load', done);
+    });
+  }
+
   function initProGallery(root) {
+    markLoaded(root);
     initPrerendered(root);
+    rescaleMobile(root);
     initSlider(root);
+    initHover(root);
     if (!root.hasAttribute('data-pg-fullscreen')) return;
     var items = [].slice.call(root.querySelectorAll('[data-hook="item-container"][data-full]'));
     function open(e) {
@@ -805,7 +1097,8 @@
     [].forEach.call(document.querySelectorAll('[data-testid="slide-show-gallery"]'), initGallery);
     var deep = lightboxParam() && lightboxItem(lightboxParam());
     if (deep) openZoom(deep.ghosts, deep.index, true);
-    if (variant === 'desktop') [].forEach.call(document.querySelectorAll('.wixui-image-button'), initTooltip);
+    [].forEach.call(document.querySelectorAll('.wixui-image-button'), initTooltip);
+    [].forEach.call(document.querySelectorAll('#SKIP_TO_CONTENT_BTN'), initSkip);
     [].forEach.call(document.querySelectorAll('form'), initForm);
     [].forEach.call(document.querySelectorAll('[data-video]'), initVideo);
     [].forEach.call(document.querySelectorAll('div.pro-gallery[id^="pro-gallery-"]:not([id^="pro-gallery-container-"])'),
