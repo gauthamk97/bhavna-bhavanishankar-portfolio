@@ -136,8 +136,10 @@ def site_link(target, page, variant):
         anchor = "#" + anchor
     if target and target not in PAGES:
         return None
+    if anchor and (target or "home") == page:
+        return anchor  # same page: jump without reloading
     dest = (["m"] if variant == "mobile" else []) + ([target] if target else [])
-    return (rel_prefix(page, variant) + "/".join(dest) + ("/" if dest else "")) or "./" + anchor
+    return (rel_prefix(page, variant) + "/".join(dest) + ("/" if dest else "") or "./") + anchor
 
 
 def convert(page, variant, src):

@@ -140,6 +140,39 @@
     }
   }
 
+  // Wix's scroll lock: Wix's own CSS fixes the body in place and offsets the
+  // site by the saved scroll position; restore that position when unlocking.
+  var blockedAt = 0;
+  function blockScroll(on) {
+    var body = document.body;
+    if (on === body.classList.contains('blockSiteScrolling')) return;
+    if (on) {
+      blockedAt = window.scrollY;
+      body.style.setProperty('--blocked-site-scroll-margin-top', blockedAt + 'px');
+      body.classList.add('blockSiteScrolling');
+    } else {
+      body.classList.remove('blockSiteScrolling');
+      body.style.removeProperty('--blocked-site-scroll-margin-top');
+      if (!body.getAttribute('style')) body.removeAttribute('style');
+      window.scrollTo(0, blockedAt);
+    }
+  }
+
+  // Same-page anchor links (and Wix's "Up" button) scroll smoothly, like on Wix.
+  function initAnchors() {
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('a[data-anchor]');
+      if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      var href = a.getAttribute('href') || '';
+      var target = a.getAttribute('data-anchor') === 'SCROLL_TO_TOP' ? document.documentElement
+        : href.charAt(0) === '#' && document.getElementById(decodeURIComponent(href.slice(1)));
+      if (!target) return;
+      e.preventDefault();
+      if (target === document.documentElement) window.scrollTo({ top: 0, behavior: 'smooth' });
+      else target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
   // Mobile hamburger ("tiny menu"): Wix renders the open menu from the hidden
   // SEO link list into the full-screen overlay when the button is pressed.
   function initTinyMenu(nav) {
@@ -161,12 +194,14 @@
       nav.classList.add('kgNViD');
       button.setAttribute('aria-expanded', 'true');
       button.querySelector('svg').setAttribute('preserveAspectRatio', '');
+      blockScroll(true);
     }
     function close() {
       slot.innerHTML = '';
       nav.classList.remove('kgNViD');
       button.removeAttribute('aria-expanded');
       button.querySelector('svg').setAttribute('preserveAspectRatio', 'none');
+      blockScroll(false);
     }
     button.addEventListener('click', function () {
       if (nav.classList.contains('kgNViD')) close(); else open();
@@ -181,5 +216,6 @@
     [].forEach.call(document.querySelectorAll('nav.TINY_MENU'), initTinyMenu);
     [].forEach.call(document.querySelectorAll('[data-testid="slide-show-gallery"]'), initGallery);
     [].forEach.call(document.querySelectorAll('form'), initForm);
+    initAnchors();
   });
 })();
