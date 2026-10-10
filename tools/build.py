@@ -21,7 +21,8 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SITE = "https://www.bhavnabhavanishankar.com"
 PAGES = ["home", "about", "mse", "coastal-flavor", "enhancing-education", "finz",
-         "home-1", "mgm-nexus", "spark-innovation-lab", "spatium"]
+         "home-1", "mgm-nexus", "spark-innovation-lab", "spatium",
+         "copy-of-mse", "contact", "copy-of-finz", "copy-of-work", "clients"]
 UA = {"desktop": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
                  "(KHTML, like Gecko) Chrome/130.0 Safari/537.36",
       "mobile": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
