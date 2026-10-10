@@ -1,6 +1,6 @@
 // Replaces the bits of Wix's runtime this site relies on: the desktop/mobile
-// page switch, slideshow galleries, image zoom, video players, carousels and
-// the contact form.
+// page switch, slideshow galleries, image zoom, pro-gallery sliders and
+// fullscreen view, video players, carousels and the contact form.
 (function () {
   var meta = document.querySelector('meta[name="site-variant"]');
   var variant = meta.getAttribute('content');
@@ -233,6 +233,329 @@
     });
   }
 
+  // Wix pro-gallery slider: the arrows centre the next/previous item with a
+  // 400ms transform (as Wix does), then commit the scroll position.
+  function initSlider(root) {
+    var scroller = root.querySelector('.gallery-horizontal-scroll');
+    var next = root.querySelector('[data-hook="nav-arrow-next"]');
+    if (!scroller || !next) return;
+    var inner = scroller.querySelector('.gallery-horizontal-scroll-inner') || scroller.firstElementChild;
+    var items = [].slice.call(scroller.querySelectorAll('[data-hook="item-container"]'));
+    var back = next.cloneNode(true);
+    back.setAttribute('data-hook', 'nav-arrow-back');
+    back.setAttribute('aria-label', 'Previous Item');
+    back.style.left = next.style.right;
+    back.style.right = '';
+    var svg = back.querySelector('svg');
+    if (svg) svg.style.transform = 'scaleX(-1) scale(1)';
+    next.parentNode.insertBefore(back, next);
+    var moving = false;
+
+    function maxScroll() { return scroller.scrollWidth - scroller.clientWidth; }
+    function update() {
+      back.style.display = scroller.scrollLeft > 1 ? '' : 'none';
+      next.style.display = scroller.scrollLeft < maxScroll() - 1 ? '' : 'none';
+    }
+    function center(item) {
+      var r = item.getBoundingClientRect();
+      return r.left - scroller.getBoundingClientRect().left + scroller.scrollLeft + r.width / 2;
+    }
+    function current() {
+      var mid = scroller.scrollLeft + scroller.clientWidth / 2, best = 0;
+      items.forEach(function (item, i) {
+        if (Math.abs(center(item) - mid) < Math.abs(center(items[best]) - mid)) best = i;
+      });
+      return best;
+    }
+    function go(step) {
+      if (moving || !items.length) return;
+      var i = Math.max(0, Math.min(items.length - 1, current() + step));
+      var target = Math.round(Math.max(0, Math.min(maxScroll(), center(items[i]) - scroller.clientWidth / 2)));
+      var delta = target - scroller.scrollLeft;
+      if (!delta) return;
+      moving = true;
+      scroller.style.scrollSnapType = 'none';
+      inner.style.transition = 'transform 400ms cubic-bezier(0.46, 0.1, 0.25, 1)';
+      void inner.offsetWidth;
+      inner.style.transform = 'translateX(' + -delta + 'px)';
+      setTimeout(function () {
+        inner.style.transition = 'none';
+        inner.style.transform = 'translateX(0px)';
+        scroller.scrollLeft = target;
+        scroller.style.scrollSnapType = '';
+        moving = false;
+        update();
+      }, 400);
+    }
+    [[back, -1], [next, 1]].forEach(function (a) {
+      a[0].addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        go(a[1]);
+      });
+    });
+    scroller.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    update();
+  }
+
+  // Galleries Wix lays out only in the browser (server HTML hides the items):
+  // fit the columns to the real width, keeping Wix's gaps and info height.
+  function initPrerendered(root) {
+    var pre = root.querySelector('.pro-gallery-prerender');
+    if (!pre) return;
+    var items = [].slice.call(root.querySelectorAll('[data-hook="item-container"]'));
+    if (!items.length) return;
+    var px = function (v) { return parseFloat(v) || 0; };
+    var boxes = items.map(function (it) {
+      var wrap = it.querySelector('[data-hook="item-wrapper"]');
+      return { left: px(it.style.left), top: px(it.style.top), w: px(it.style.width), h: px(it.style.height),
+               img: wrap ? px(wrap.style.height) : px(it.style.height) };
+    });
+    var cols = boxes.filter(function (b) { return b.top === boxes[0].top; }).length;
+    var gap = cols > 1 ? boxes[1].left - boxes[0].left - boxes[0].w : 0;
+    var containers = root.querySelectorAll('[id^="pro-gallery-container-"], [id^="pro-gallery-margin-container-"]');
+    pre.classList.remove('pro-gallery-prerender');
+
+    function layout() {
+      var width = root.clientWidth;
+      if (!width) return;
+      var w = (width - gap * (cols - 1)) / cols, bottom = 0, rowTop = 0, rowH = 0;
+      items.forEach(function (it, i) {
+        var b = boxes[i], img = w * boxes[0].img / boxes[0].w, h = img + b.h - b.img;
+        if (i && i % cols === 0) { rowTop += rowH + gap; rowH = 0; }
+        rowH = Math.max(rowH, h);
+        it.style.left = (i % cols) * (w + gap) + 'px';
+        it.style.top = rowTop + 'px';
+        it.style.width = w + 'px';
+        it.style.height = h + 'px';
+        it.style.opacity = '1';
+        it.style.display = 'block';
+        [].forEach.call(it.querySelectorAll('[data-hook="item-wrapper"], [data-hook="image-item"], ' +
+            '.item-hover-flex-container, [data-hook^="item-hover-"]'), function (el) {
+          el.style.width = w + 'px';
+          el.style.height = img + 'px';
+        });
+        bottom = Math.max(bottom, rowTop + h);
+      });
+      [].forEach.call(containers, function (c) { c.style.height = bottom + 'px'; });
+    }
+    layout();
+    window.addEventListener('resize', layout);
+  }
+
+  // Pro-gallery fullscreen view (Wix's "expand" mode), rebuilt with the class
+  // names Wix's per-gallery colour/font rules in the page target.
+  var HEART_HOLE = 'M8.1816,5.0039 C7.9276,5.0039 7.6696,5.0279 7.4106,5.0759 C5.7326,5.3909 4.3566,6.8479 4.0646,8.6189 ' +
+    'C3.9346,9.4039 4.0036,10.2029 4.2616,10.9319 C4.2636,10.9379 4.2656,10.9439 4.2676,10.9499 C5.1716,13.8579 10.2066,17.4019 ' +
+    '11.7286,18.4189 C11.8966,18.5329 12.1076,18.5309 12.2746,18.4189 C13.7956,17.4019 18.8266,13.8589 19.7326,10.9499 ' +
+    'C19.9966,10.2029 20.0646,9.4039 19.9356,8.6189 C19.6426,6.8479 18.2666,5.3909 16.5896,5.0759 C14.9596,4.7749 13.3646,5.4459 ' +
+    '12.4126,6.8369 C12.2256,7.1099 11.7736,7.1099 11.5876,6.8369 C10.7866,5.6669 9.5276,5.0039 8.1816,5.0039 ';
+  var HEART_FILLED = 'M12.0016,19.5029 C11.7136,19.5029 11.4246,19.4189 11.1726,19.2509 C9.1366,17.8899 4.2966,14.3869 ' +
+    '3.3156,11.2559 C3.0036,10.3719 2.9216,9.4039 3.0776,8.4569 C3.4436,6.2429 5.1106,4.4889 7.2266,4.0939 C9.0226,3.7539 ' +
+    '10.8006,4.3809 11.9996,5.7409 C13.1996,4.3829 14.9766,3.7569 16.7736,4.0939 C18.8896,4.4899 20.5566,6.2429 20.9216,8.4569 ' +
+    'C21.0786,9.4069 20.9956,10.3789 20.6816,11.2659 C19.7116,14.3819 14.8676,17.8889 12.8306,19.2509 C12.5786,19.4189 ' +
+    '12.2896,19.5029 12.0016,19.5029';
+  var ARROW_SVG = '<svg fill="currentColor" stroke="none" width="15" height="27" viewBox="0 0 15 27"><path fill-rule="nonzero" ' +
+    'd="M.198 25.926l1.06 1.06 13.259-13.258L1.258.47.198 1.53l12.197 12.198z"></path></svg>';
+  var LOVES_KEY = 'site-pg-loves';
+  var pageTitle = document.title;
+
+  function storedLoves() {
+    try { return JSON.parse(localStorage.getItem(LOVES_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function setUrl(pgid) {
+    var url = new URL(location.href);
+    if (pgid) url.searchParams.set('pgid', pgid); else url.searchParams.delete('pgid');
+    history.replaceState(history.state, '', url.pathname + url.search + url.hash);
+  }
+
+  function openFullscreen(root, start) {
+    var items = [].slice.call(root.querySelectorAll('[data-hook="item-container"][data-full]'));
+    if (!items[start]) return;
+    var comp = root.id.replace(/^pro-gallery-/, '');
+    var mobile = variant === 'mobile';
+    var side = root.getAttribute('data-pg-info') === 'side';
+    var opener = document.activeElement;
+    var index = start;
+    var love = '<span class="fullscreen-social-love-container"><button class="fullscreen-social-love' +
+      (mobile ? '' : ' fullscreen-icon') + '" role="checkbox" aria-checked="false" title="Love">' +
+      '<svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path fill-rule="evenodd"></path></svg>' +
+      '</button><i class="fullscreen-social-love-count"></i></span>';
+    var bar = mobile
+      ? '<div class="fullscreen-mobile-bar site-pgfs__bar"><button class="fullscreen-close progallery-svg-font-icons-back" ' +
+        'aria-label="Exit expand mode"></button><div class="fullscreen-social">' + love + '</div></div>'
+      : '<div class="site-pgfs__bar"><div class="fullscreen-social"><button class="fullscreen-icon fullscreen-expand ' +
+        'progallery-svg-font-icons-expand-arrow" title="Open in fullscreen"></button>' + love + '</div>' +
+        '<div class="fullscreen-nav"><button class="fullscreen-icon fullscreen-close progallery-svg-font-icons-close-x" ' +
+        'aria-label="Exit expand mode"></button></div></div>';
+    var info = function (title) {
+      return '<div class="site-pgfs__info' + (side && !mobile ? ' fullscreen-side-bar' : '') + '">' +
+        '<div class="fullscreen-side-bar-title"><h1>' + title + '</h1></div></div>';
+    };
+    var body = mobile
+      ? '<div class="site-pgfs__track">' + items.map(function (it) {
+          return '<div class="site-pgfs__slide"><img alt=""><div class="site-pgfs__slide-info">' + info('') + '</div></div>';
+        }).join('') + '</div>'
+      : '<div class="site-pgfs__stage"></div>' + info('') +
+        '<button class="fullscreen-icon site-pgfs__arrow site-pgfs__prev" aria-label="Previous Item">' + ARROW_SVG + '</button>' +
+        '<button class="fullscreen-icon site-pgfs__arrow site-pgfs__next" aria-label="Next Item">' + ARROW_SVG + '</button>';
+    var host = document.createElement('div');
+    host.className = 'fullscreen-comp-wrapper ' + comp + ' site-pgfs-host';
+    host.innerHTML = '<div class="pro-fullscreen-wrapper site-pgfs" id="pro-fullscreen-wrapper">' +
+      '<div id="fullscreen-view" data-hook="fullscreen-view" class="fullscreen pro-fullscreen pro-fullscreen-inline-styles ' +
+      'inline-styles pro-fullscreen-v2 fullscreen-bright site-pgfs__view' + (mobile ? ' site-pgfs--mobile' : '') +
+      (side ? ' site-pgfs--side' : '') + '" role="dialog" aria-modal="true" tabindex="-1" ' +
+      'aria-label="Gallery item, detailed view">' + bar + body + '</div></div>';
+    var wrapper = host.firstChild, view = wrapper.firstChild;
+    var loveBtn = view.querySelector('.fullscreen-social-love');
+    var count = view.querySelector('.fullscreen-social-love-count');
+    var expand = view.querySelector('.fullscreen-expand');
+    var track = view.querySelector('.site-pgfs__track');
+    var stage = view.querySelector('.site-pgfs__stage');
+    var prev = view.querySelector('.site-pgfs__prev');
+    var nextBtn = view.querySelector('.site-pgfs__next');
+
+    function data(i) {
+      return { id: items[i].getAttribute('data-id'), title: items[i].getAttribute('data-title') || '',
+               src: items[i].getAttribute('data-full') };
+    }
+    function renderLove() {
+      var loved = !!storedLoves()[data(index).id];
+      loveBtn.classList.toggle('pro-gallery-loved', loved);
+      loveBtn.setAttribute('aria-checked', String(loved));
+      loveBtn.querySelector('path').setAttribute('d', loved ? HEART_FILLED : HEART_HOLE + HEART_FILLED);
+      count.textContent = loved ? '1' : '';
+    }
+    // Wix keeps ?pgid=<gallery>-<item> and "<item> | <page>" while an item is open.
+    function select(i) {
+      index = i;
+      var d = data(i);
+      setUrl(comp.replace(/^comp-/, '') + '-' + d.id);
+      document.title = (d.title ? d.title + ' | ' : '') + pageTitle.split(' | ')[0];
+      renderLove();
+      if (prev) {
+        prev.style.display = i > 0 ? '' : 'none';
+        nextBtn.style.display = i < items.length - 1 ? '' : 'none';
+      }
+    }
+    function show(i, fade) {
+      if (i < 0 || i >= items.length) return;
+      var d = data(i), img = document.createElement('img');
+      img.alt = d.title;
+      img.src = d.src;
+      if (fade) {
+        img.style.opacity = '0';
+        img.addEventListener('transitionend', function () {
+          [].slice.call(stage.querySelectorAll('img')).forEach(function (old) { if (old !== img) old.remove(); });
+        });
+      } else {
+        stage.innerHTML = '';
+      }
+      stage.appendChild(img);
+      if (fade) { void img.offsetWidth; img.style.opacity = '1'; }
+      view.querySelector('.site-pgfs__info h1').textContent = d.title;
+      select(i);
+    }
+    function close() {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('fullscreenchange', onFullscreen);
+      if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+      host.remove();
+      blockScroll(false);
+      document.title = pageTitle;
+      setUrl(null);
+      if (opener && opener.focus) opener.focus();
+    }
+    function go(step) {
+      if (track) track.scrollTo({ left: (index + step) * track.clientWidth, behavior: 'smooth' });
+      else show(index + step, true);
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') close();
+      else if (e.key === 'ArrowLeft') go(-1);
+      else if (e.key === 'ArrowRight') go(1);
+    }
+    function onFullscreen() {
+      if (!expand) return;
+      var on = !!document.fullscreenElement;
+      expand.classList.toggle('progallery-svg-font-icons-expand-arrow', !on);
+      expand.classList.toggle('progallery-svg-font-icons-shrink-arrow', on);
+      expand.title = on ? 'Exit fullscreen' : 'Open in fullscreen';
+    }
+
+    view.querySelector('.fullscreen-close').addEventListener('click', close);
+    loveBtn.addEventListener('click', function () {
+      var loves = storedLoves(), id = data(index).id;
+      if (loves[id]) delete loves[id]; else loves[id] = 1;
+      try { localStorage.setItem(LOVES_KEY, JSON.stringify(loves)); } catch (e) { /* not persisted */ }
+      renderLove();
+    });
+    if (expand) {
+      expand.addEventListener('click', function () {
+        if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+        else if (host.requestFullscreen) host.requestFullscreen().catch(function () {});
+      });
+      document.addEventListener('fullscreenchange', onFullscreen);
+    }
+    if (prev) {
+      prev.addEventListener('click', function () { go(-1); });
+      nextBtn.addEventListener('click', function () { go(1); });
+    }
+    document.addEventListener('keydown', onKey);
+
+    blockScroll(true);
+    wrapper.style.opacity = '0';
+    document.body.appendChild(host);
+    if (track) {
+      [].forEach.call(track.children, function (slide, i) {
+        var d = data(i), img = slide.querySelector('img');
+        img.alt = d.title;
+        img.src = d.src;
+        slide.querySelector('h1').textContent = d.title;
+      });
+      track.scrollLeft = start * track.clientWidth;
+      var settle;
+      track.addEventListener('scroll', function () {
+        clearTimeout(settle);
+        settle = setTimeout(function () {
+          var i = Math.round(track.scrollLeft / track.clientWidth);
+          if (i !== index) select(i);
+        }, 100);
+      }, { passive: true });
+      select(start);
+    } else {
+      show(start, false);
+    }
+    void wrapper.offsetWidth;
+    wrapper.style.transition = 'opacity .8s';
+    wrapper.style.opacity = '1';
+    view.focus();
+  }
+
+  function initProGallery(root) {
+    initPrerendered(root);
+    initSlider(root);
+    if (!root.hasAttribute('data-pg-fullscreen')) return;
+    var items = [].slice.call(root.querySelectorAll('[data-hook="item-container"][data-full]'));
+    function open(e) {
+      var item = e.target.closest('[data-hook="item-container"][data-full]');
+      if (!item || e.target.closest('[data-hook^="nav-arrow"]')) return;
+      e.preventDefault();
+      openFullscreen(root, items.indexOf(item));
+    }
+    root.addEventListener('click', open);
+    root.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('[data-hook="item-action"]')) open(e);
+    });
+    // Deep link: ?pgid=<gallery>-<item> opens that item, as on Wix.
+    var m = /^([^-]+)-(.+)$/.exec(new URLSearchParams(location.search).get('pgid') || '');
+    if (m && root.id === 'pro-gallery-comp-' + m[1]) {
+      var i = items.map(function (it) { return it.getAttribute('data-id'); }).indexOf(m[2]);
+      if (i >= 0) openFullscreen(root, i);
+    }
+  }
+
   // Wix "Carousel" widget (self-hosted iframe): once it reports ready, send it
   // the images and settings the Wix page would send.
   window.addEventListener('message', function (e) {
@@ -255,6 +578,8 @@
     [].forEach.call(document.querySelectorAll('[data-testid="slide-show-gallery"]'), initGallery);
     [].forEach.call(document.querySelectorAll('form'), initForm);
     [].forEach.call(document.querySelectorAll('[data-video]'), initVideo);
+    [].forEach.call(document.querySelectorAll('div.pro-gallery[id^="pro-gallery-"]:not([id^="pro-gallery-container-"])'),
+      initProGallery);
     initAnchors();
   });
 })();

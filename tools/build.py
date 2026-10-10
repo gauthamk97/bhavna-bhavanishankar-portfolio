@@ -169,6 +169,158 @@ def expand_galleries(doc, props):
     return doc
 
 
+# Wix Art Store galleries show the item info in a side bar in the fullscreen view.
+ART_STORE_APP = "147ab90e-91c5-21b2-d6ca-444c28c8a23b"
+
+
+def warmup_galleries(doc):
+    """Pro-gallery item lists (in display order) from the page's warmup data."""
+    m = re.search(r'<script type="application/json" id="wix-warmup-data">(.*?)</script>', doc, re.S)
+    out = {}
+    for app, data in (json.loads(m.group(1)).get("appsWarmupData", {}) if m else {}).items():
+        for key, val in (data or {}).items():
+            if key.endswith("_galleryData") and isinstance(val, dict) and val.get("items"):
+                out[key[:-len("_galleryData")]] = (app, val["items"])
+    return out
+
+
+def item_blocks(g):
+    """(start, end) of each item's outermost element inside a pro-gallery."""
+    blocks = []
+    for m in re.finditer(r'<div data-id="[^"]+" class="item-link-wrapper"', g):
+        start = m.start()
+        outer = g.rfind("<div", 0, start)
+        if outer >= 0 and g.startswith('<div data-hook="group-view"', outer) and g.find(">", outer) + 1 == start:
+            start = outer  # slider items are wrapped in a group-view
+        blocks.append((start, div_end(g, start)))
+    return blocks
+
+
+def item_box(block):
+    style = re.search(r'data-hook="item-container"[^>]*style="([^"]*)"', block).group(1)
+    num = lambda k: float(re.search(r"(?:^|;)" + k + r":(-?[\d.]+)", style).group(1))
+    return num("left"), num("top"), num("width"), num("height")
+
+
+def media_with_token(uri, mode, w, h, token=None):
+    url = (f"https://static.wixstatic.com/media/{uri}/v1/{mode}/w_{round(w)},h_{round(h)},q_90,"
+           f"usm_0.66_1.00_0.01,enc_auto/{uri}")
+    return url + (f"?token={token}" if token else "")
+
+
+def new_item(tpl, old, it, i, box, tbox):
+    """Clone the template item block for warmup item `it` at index i, size and
+    position `box` (template: `old`, `tbox`)."""
+    md, omd = it["metaData"], old["metaData"]
+    (l, t, w, h), (tl, tt, tw, th) = box, tbox
+    g = tpl
+    for a, b in ((old["itemId"], it["itemId"]), (old["itemId"].replace("-", ""), it["itemId"].replace("-", ""))):
+        g = g.replace(a, b)
+    g = re.sub(r'(id="pgi[0-9a-f]+_)\d+"', lambda m: f'{m.group(1)}{i}"', g)
+    g = re.sub(r'data-idx="\d+"', f'data-idx="{i}"', g)
+    if omd.get("title"):
+        old_t, new_t = html.escape(omd["title"]), html.escape(md.get("title", ""))
+        g = g.replace(f'alt="{old_t}"', f'alt="{new_t}"').replace(f'aria-label="{old_t}"', f'aria-label="{new_t}"')
+    fmt = lambda v: ("%g" % round(v, 3))
+    g = re.sub(r"\bwidth:" + re.escape(fmt(tw)) + "px", "width:" + fmt(w) + "px", g)
+    g = re.sub(r"\bheight:" + re.escape(fmt(th)) + "px", "height:" + fmt(h) + "px", g)
+    g = re.sub(r"(data-hook=\"item-container\"[^>]*style=\"[^\"]*?)top:[^;]*;left:[^;]*;",
+               lambda m: f"{m.group(1)}top:{fmt(t) + 'px' if t else 0};left:{fmt(l) + 'px' if l else 0};", g)
+    g = re.sub(r"--group-left:[\d.]+px", f"--group-left:{fmt(l)}px", g)
+    g = re.sub(r"--group-width:([\d.]+)px", lambda m: f"--group-width:{fmt(float(m.group(1)) - tw + w)}px", g)
+    ouri, nuri = omd["name"], md["name"]
+    ostem, oext = os.path.splitext(ouri)
+    nstem, next_ = os.path.splitext(nuri)
+
+    def url(m):
+        u = m.group(0)
+        if ouri not in u:
+            return u
+        u = u.split("?token=")[0]
+        p = re.search(r"/v1/(fit|fill)/w_(\d+),h_(\d+)", u)
+        k = int(p.group(2)) / tw
+        nw, nh = w * k, h * k
+        if p.group(1) == "fit" and nw > md["width"]:
+            nw, nh = md["width"], md["width"] * h / w
+        u = u.replace(p.group(0), f"/v1/{p.group(1)}/w_{round(nw)},h_{int(nh)}")
+        u = u.replace(f"/media/{ouri}/", f"/media/{nuri}/")
+        u = re.sub(re.escape(ostem) + r"\.(\w+)$", lambda e: nstem + (next_ if "." + e.group(1) == oext else "." + e.group(1)), u)
+        return u + (f"?token={it['token']}" if it.get("token") else "")
+    return MEDIA_RE.sub(url, g)
+
+
+def fill_pro_galleries(doc, galleries):
+    """Wix renders only the first items of a pro-gallery on the server and adds
+    the rest in the browser; render every item from the warmup data (same
+    markup and geometry as Wix's), and tag each with what site.js needs for
+    the fullscreen view."""
+    for comp, (app, items) in galleries.items():
+        gstart = doc.find(f'<div id="pro-gallery-{comp}" class="pro-gallery"')
+        if gstart < 0:
+            continue
+        gend = div_end(doc, gstart)
+        g = doc[gstart:gend]
+        blocks = item_blocks(g)
+        have = {re.search(r'data-id="([^"]+)"', g[s:e]).group(1): g[s:e] for s, e in blocks}
+        by_id = {it["itemId"]: it for it in items}
+        if not have or set(have) - set(by_id) or any(blocks[k][1] != blocks[k + 1][0] for k in range(len(blocks) - 1)):
+            continue
+        boxes = [item_box(b) for b in have.values()]
+        row = all(b[1] == boxes[0][1] for b in boxes)
+        gap = boxes[1][0] - boxes[0][0] - boxes[0][2] if row and len(boxes) > 1 else 10
+        tpl_id, tpl = list(have.items())[-1]
+        tbox = item_box(tpl)
+        out, placed = [], []
+        for i, it in enumerate(items):
+            if it["itemId"] in have:
+                block = have[it["itemId"]]
+                box = item_box(block)
+            else:
+                md, tmd = it["metaData"], by_id[tpl_id]["metaData"]
+                w, h = tbox[2], tbox[3]
+                if abs(tbox[2] / tbox[3] - tmd["width"] / tmd["height"]) < 0.02:
+                    w = round(h * md["width"] / md["height"])  # sized by aspect ratio
+                if row:
+                    prev = placed[-1]
+                    box = (prev[0] + prev[2] + gap, prev[1], w, h)
+                else:
+                    cols = sum(1 for b in boxes if b[1] == boxes[0][1])
+                    base, pitch = placed[i - cols], boxes[cols][1] - boxes[0][1]
+                    box = (base[0], base[1] + pitch, w, h)
+                block = new_item(tpl, by_id[tpl_id], it, i, box, tbox)
+            placed.append(box)
+            md = it["metaData"]
+            scale = min(1.0, 1920 / max(md["width"], md["height"]))
+            full = media_with_token(md["name"], "fit", md["width"] * scale, md["height"] * scale, it.get("token"))
+            attrs = (f' data-title="{html.escape(md.get("title", ""))}" data-full="{full}"'
+                     f' data-w="{md["width"]}" data-h="{md["height"]}"')
+            block = re.sub(r'(<div [^>]*data-hook="item-container")', lambda m: m.group(1) + attrs, block, count=1)
+            out.append(block)
+        first, last = blocks[0][0], blocks[-1][1]
+        g = g[:first] + "".join(out) + g[last:]
+        info = ' data-pg-info="side"' if app == ART_STORE_APP else ""
+        g = g.replace('class="pro-gallery"', f'class="pro-gallery" data-pg-fullscreen{info}', 1)
+        doc = doc[:gstart] + g + doc[gend:]
+    return doc
+
+
+def sharpen_prerendered(doc):
+    """Galleries Wix lays out only in the browser (e.g. the Albums widget) are
+    re-laid out by site.js at the real width; fetch their images large enough."""
+    for m in list(re.finditer(r'class="pro-gallery-prerender"', doc))[::-1]:
+        start = doc.rfind('<div id="pro-gallery-', 0, m.start())
+        end = div_end(doc, start)
+
+        def big(u):
+            p = re.search(r"/v1/fill/w_(\d+),h_(\d+)", u.group(0))
+            if not p:
+                return u.group(0)
+            k = 800 / max(int(p.group(1)), int(p.group(2)))
+            return u.group(0).replace(p.group(0), f"/v1/fill/w_{round(int(p.group(1)) * k)},h_{round(int(p.group(2)) * k)}")
+        doc = doc[:start] + MEDIA_RE.sub(big, doc[start:end]) + doc[end:]
+    return doc
+
+
 PLAY_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMin slice" viewBox="0 0 36 36">'
             '<g fill="none" fill-rule="evenodd"><circle cx="18" cy="18" r="17" stroke="#fff" stroke-width="2"></circle>'
             '<path fill="#fff" d="m23.935 17.708-10.313 6.033V11.676z"></path></g></svg>')
@@ -288,6 +440,7 @@ def site_link(target, page, variant):
 
 def convert(page, variant, src, data):
     doc = open(src, encoding="utf-8").read()
+    galleries = warmup_galleries(doc)
     props = json.load(open(data))["compProps"] if os.path.exists(data) else {}
     prefix = rel_prefix(page, variant)
 
@@ -301,10 +454,12 @@ def convert(page, variant, src, data):
     doc = re.sub(r'(<style\b[^>]*?)\sdata-(?:url|href)="[^"]*"', r"\1", doc)
 
     # 2. Components Wix renders from its page data: every slideshow slide,
-    #    video players and the "Carousel" widget.
+    #    video players, the "Carousel" widget and every pro-gallery item.
     doc = expand_galleries(doc, props)
     doc = fill_videos(doc, props, prefix, variant)
     doc = fill_carousels(doc, props, prefix)
+    doc = fill_pro_galleries(doc, galleries)
+    doc = sharpen_prerendered(doc)
 
     # Swap blurred gallery placeholders for full-size images.
     doc = upgrade_lqip(doc)
