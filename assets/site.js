@@ -1,5 +1,6 @@
 // Replaces the bits of Wix's runtime this site relies on: the desktop/mobile
-// page switch, slideshow galleries, image zoom and the contact form.
+// page switch, slideshow galleries, image zoom, video players, carousels and
+// the contact form.
 (function () {
   var meta = document.querySelector('meta[name="site-variant"]');
   var variant = meta.getAttribute('content');
@@ -9,7 +10,7 @@
   }
 
   function initGallery(gallery) {
-    var ghosts = gallery.querySelectorAll('.w3sg0B > [data-testid="gallery-item-ghost"]');
+    var ghosts = gallery.querySelectorAll('[data-testid="gallery-item-ghost"]');
     var stage = gallery.querySelector('[data-testid="slide-show-gallery-items"]');
     var counter = gallery.querySelector('[data-testid="gallery-counter"]');
     if (!ghosts.length || !stage) return;
@@ -211,11 +212,49 @@
     });
   }
 
+  // Video player: the cover (poster + play button) is swapped for a native
+  // player with controls on click, like Wix's player starts on its cover.
+  function initVideo(root) {
+    var cover = root.querySelector('[data-testid="playable-cover"]');
+    if (!cover) return;
+    cover.addEventListener('click', function () {
+      var video = document.createElement('video');
+      video.className = 'site-video';
+      video.src = root.getAttribute('data-video');
+      video.controls = true;
+      video.playsInline = true;
+      video.loop = root.getAttribute('data-loop') === 'true';
+      video.muted = root.getAttribute('data-muted') === 'true';
+      var img = cover.querySelector('img');
+      if (img) video.poster = img.src;
+      root.appendChild(video);
+      cover.remove();
+      video.play();
+    });
+  }
+
+  // Wix "Carousel" widget (self-hosted iframe): once it reports ready, send it
+  // the images and settings the Wix page would send.
+  window.addEventListener('message', function (e) {
+    var msg;
+    try { msg = JSON.parse(e.data); } catch (err) { return; }
+    if (!msg || msg.intent !== 'TPA' || msg.type !== 'appStateChanged') return;
+    var frame = [].filter.call(document.querySelectorAll('iframe[data-carousel]'), function (f) {
+      return f.contentWindow === e.source;
+    })[0];
+    if (!frame || !/"componentReady"/.test(msg.data && msg.data.state)) return;
+    var params = JSON.parse(frame.getAttribute('data-carousel'));
+    params.items.forEach(function (item) { item.uri = new URL(item.uri, location.href).href; });
+    frame.contentWindow.postMessage(JSON.stringify(
+      { intent: 'addEventListener', eventType: 'SETTINGS_UPDATED', params: params }), '*');
+  });
+
   document.addEventListener('DOMContentLoaded', function () {
     [].forEach.call(document.querySelectorAll('wix-dropdown-menu'), initMenu);
     [].forEach.call(document.querySelectorAll('nav.TINY_MENU'), initTinyMenu);
     [].forEach.call(document.querySelectorAll('[data-testid="slide-show-gallery"]'), initGallery);
     [].forEach.call(document.querySelectorAll('form'), initForm);
+    [].forEach.call(document.querySelectorAll('[data-video]'), initVideo);
     initAnchors();
   });
 })();

@@ -3,6 +3,17 @@
 .site-form-thanks { visibility: hidden; }
 .site-form-thanks.site-form-thanks--shown { visibility: visible; }
 
+/* Native player replacing the Wix video cover; fills the player box. */
+.site-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  object-fit: contain;
+}
+
 .site-zoom-open, .site-zoom-open body { overflow: hidden; }
 
 /* Matches Wix's image zoom view: 90% black overlay, image 50px from the top,

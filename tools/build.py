@@ -4,7 +4,11 @@
 Usage: python3 tools/build.py <raw_desktop_dir> <raw_mobile_dir>
 
 Each raw dir holds one <page>.html per page (home.html for "/"), saved from
-https://www.bhavnabhavanishankar.com with a desktop / mobile User-Agent.
+https://www.bhavnabhavanishankar.com with a desktop / mobile User-Agent, and
+next to it a <raw_dir>_data/<page>.json with the page's component props
+({"compProps": {...}}, from the siteassets "thunderbolt-features" JSON the live
+page loads). Wix renders galleries, videos and carousels from those props at
+runtime, so the server HTML alone is incomplete.
 Wix's runtime JavaScript is removed; media, fonts and CSS are downloaded into
 assets/ and every reference is rewritten to a relative path, so the site works
 both at a GitHub Pages project URL and on the custom domain.
@@ -47,7 +51,7 @@ downloaded = {}  # absolute url -> path relative to site root
 
 def fetch(url):
     req = urllib.request.Request(url, headers={"User-Agent": UA["desktop"]})
-    with urllib.request.urlopen(req, timeout=60) as r:
+    with urllib.request.urlopen(req, timeout=600) as r:
         return r.read(), r.headers.get_content_type()
 
 
@@ -112,6 +116,146 @@ def upgrade_lqip(doc):
     return re.sub(r"<wow-image\b.*?</wow-image>", fix, doc, flags=re.S)
 
 
+def div_end(doc, start):
+    """Index just past the </div> closing the <div> that starts at `start`."""
+    depth = 0
+    for m in re.compile(r"<div\b|</div>").finditer(doc, start):
+        depth += 1 if m.group(0) == "<div" else -1
+        if not depth:
+            return m.end()
+    raise ValueError("unbalanced div at %d" % start)
+
+
+def media_url(uri, w, h, q=85):
+    return (f"https://static.wixstatic.com/media/{uri}/v1/fill/w_{round(w)},h_{round(h)},al_c,q_{q},"
+            f"usm_0.66_1.00_0.01,enc_auto/{uri}")
+
+
+def box_size(doc, comp):
+    m = re.search(r"#" + re.escape(comp) + r"\{width:(\d+)px;height:(\d+)px;\}", doc)
+    return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+
+
+def expand_galleries(doc, props):
+    """The server HTML only holds a window of each slideshow's slides (first,
+    second, last); rebuild the hidden ghost list from the full item list."""
+    for m in list(re.finditer(r'<div id="(comp-[^"]+)" data-testid="slide-show-gallery"', doc))[::-1]:
+        items = props.get(m.group(1), {}).get("items")
+        first = doc.find('data-testid="gallery-item-ghost"', m.end())
+        if not items or first < 0:
+            continue
+        start = doc.rfind("<div", 0, first)
+        end = start
+        while doc.startswith("<div", end) and 'data-testid="gallery-item-ghost"' in doc[end:doc.find(">", end)]:
+            end = div_end(doc, end)
+        tpl = doc[start:div_end(doc, start)]
+        old_title = re.search(r'data-testid="gallery-item-title"[^>]*>([^<]*)<', tpl).group(1)
+        ghosts = []
+        for i, it in enumerate(items):
+            img = it["image"]
+            info = json.loads(html.unescape(re.search(r'data-image-info="([^"]+)"', tpl).group(1)))
+            info["imageData"].update(width=img["width"], height=img["height"], uri=img["uri"])
+            title = html.escape(it.get("title", ""))
+            g = tpl.replace(f'aria-label="{old_title}"', f'aria-label="{title}"')
+            g = g.replace(f'alt="{old_title}"', f'alt="{title}"')
+            g = re.sub(r'(data-testid="gallery-item-title"[^>]*>)[^<]*', lambda s: s.group(1) + title, g)
+            g = re.sub(r'(data-testid="gallery-item-description"[^>]*>)[^<]*',
+                       lambda s: s.group(1) + html.escape(it.get("description", "")), g)
+            g = re.sub(r'data-image-info="[^"]+"',
+                       lambda _: 'data-image-info="' + html.escape(json.dumps(info, separators=(",", ":"))) + '"', g)
+            g = re.sub(r"describedby_item-\d+-", f"describedby_item-{i}-", g)
+            ghosts.append(g)  # upgrade_lqip swaps in the full-size src from data-image-info
+        doc = doc[:start] + "".join(ghosts) + doc[end:]
+    return doc
+
+
+PLAY_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMin slice" viewBox="0 0 36 36">'
+            '<g fill="none" fill-rule="evenodd"><circle cx="18" cy="18" r="17" stroke="#fff" stroke-width="2"></circle>'
+            '<path fill="#fff" d="m23.935 17.708-10.313 6.033V11.676z"></path></g></svg>')
+
+
+def fill_videos(doc, props, prefix, variant):
+    """Wix-hosted video players: the server HTML is an empty box. Render Wix's
+    resting state (poster under the play-button cover) and keep a local copy of
+    the video for site.js to play."""
+    vp = re.search(r"VideoPlayer\d+", doc)
+    pc = re.search(r"PlayableCover\d+", doc)
+
+    def fill(m):
+        comp = m.group(1)
+        p = props.get(comp)
+        if not p or "video.wixstatic.com" not in p.get("src", "") or not vp or not pc:
+            return m.group(0)
+        src, small = p["src"], p["src"].replace("/1080p/", "/720p/")
+        # GitHub rejects files over 100MB; fall back to 720p for very large ones.
+        if not resolved(src) and (resolved(small) or int(urllib.request.urlopen(
+                urllib.request.Request(src, method="HEAD"), timeout=60).headers["Content-Length"]) > 50e6):
+            src = small
+        video = prefix + download(src, "video")
+        poster = p.get("playableConfig", {}).get("poster", {})
+        w, h = box_size(doc, comp)
+        cls = f"{pc.group(0)}__root {vp.group(0)}__cover" + (f" {vp.group(0)}--isMobileView" if variant == "mobile" else "")
+        img = ""
+        if poster.get("uri"):
+            img = (f'<wow-image class="Qh0lWW"><img alt="" src="{media_url(poster["uri"], 2 * w, 2 * h)}" '
+                   f'style="width:100%;height:100%;object-fit:cover"></wow-image>')
+        cover = (f'<div data-testid="playable-cover" id="cover-{comp}" class="{cls}">{img}'
+                 f'<div class="{pc.group(0)}__overlay"><button class="{pc.group(0)}__playButton" '
+                 f'aria-label="Play video">{PLAY_SVG}</button></div></div>')
+        attrs = (f' data-video="{video}" data-loop="{str(p.get("loop", False)).lower()}"'
+                 f' data-muted="{str(p.get("muted", False)).lower()}"')
+        return m.group(0)[:-len("></div>")] + attrs + ">" + cover + "</div>"
+    return re.sub(r'<div id="(comp-[^"]+)" class="VideoPlayer\d+__root[^"]*"[^>]*></div>', fill, doc)
+
+
+carousel_html = None
+
+
+def attr_json(value):
+    """JSON for a single-quoted attribute; keeps media URLs quote-delimited."""
+    return (json.dumps(value, separators=(",", ":")).replace("&", "&amp;")
+            .replace("'", "&#39;").replace("<", "&lt;"))
+
+
+def carousel_widget(url):
+    """Self-host Wix's "Carousel" widget page and the scripts it loads."""
+    global carousel_html
+    if carousel_html is None:
+        page = fetch(url.split("?")[0])[0].decode("utf-8")
+        for src in set(re.findall(r'<script[^>]*src="((?:https?:)?//[^"]+)"', page)):
+            rel = download(src, "carousel")
+            page = page.replace(f'src="{src}"', f'src="{os.path.basename(rel)}"')
+        carousel_html = f"assets/carousel/Carousel-{hashlib.md5(page.encode()).hexdigest()[:10]}.html"
+        with open(os.path.join(ROOT, carousel_html), "w", encoding="utf-8") as f:
+            f.write(page)
+    return carousel_html
+
+
+def fill_carousels(doc, props, prefix):
+    """Point the Carousel iframes at the local widget and attach the settings
+    the Wix page posts to it (site.js sends them when the widget is ready)."""
+    def fix(m):
+        comp, src = m.group(1), html.unescape(m.group(2))
+        p = props.get(comp)
+        if not p or not p.get("images"):
+            return re.sub(r'\sdata-src="[^"]*"', "", m.group(0))
+        w, h = box_size(doc, comp)
+        # The widget shows each image at most 1/2.4 of its width; keep 2x that.
+        tw = max(w / 2.4 * 2, 600)
+        items = []
+        for im in p["images"]:
+            scale = min(1.0, tw / im["width"])
+            items.append(dict(im, uri=media_url(im["uri"], im["width"] * scale, im["height"] * scale, 90)))
+        params = {"props": p.get("compProps", {}), "quality": p.get("quality", {}),
+                  "marketingLandingPage": False, "items": items, "mainPageId": p.get("mainPageId")}
+        local = prefix + carousel_widget(src) + "?" + src.split("?", 1)[1]
+        frame = (f'<iframe class="{m.group(3)}" src="{html.escape(local)}" loading="lazy" scrolling="no" '
+                 f"title=\"Carousel\" data-carousel='{attr_json(params)}'></iframe>")
+        return re.sub(r'\sdata-src="[^"]*"', "", m.group(0)[:m.group(0).find("<iframe")]) + frame
+    return re.sub(r'<wix-iframe id="(comp-[^"]+)"[^>]*data-src="([^"]*Carousel[^"]*)"[^>]*>'
+                  r'<iframe class="([^"]*)"[^>]*></iframe>', fix, doc)
+
+
 def version(rel):
     """Content hash used as a cache-busting query string."""
     with open(os.path.join(ROOT, rel), "rb") as f:
@@ -142,8 +286,10 @@ def site_link(target, page, variant):
     return (rel_prefix(page, variant) + "/".join(dest) + ("/" if dest else "") or "./") + anchor
 
 
-def convert(page, variant, src):
+def convert(page, variant, src, data):
     doc = open(src, encoding="utf-8").read()
+    props = json.load(open(data))["compProps"] if os.path.exists(data) else {}
+    prefix = rel_prefix(page, variant)
 
     # 1. Drop the Wix runtime: scripts, resource hints, noscript fallbacks.
     doc = re.sub(r"<script\b.*?</script>", "", doc, flags=re.S | re.I)
@@ -154,11 +300,13 @@ def convert(page, variant, src):
     doc = re.sub(r"/\*#\s*sourceMappingURL=[^*]*\*/", "", doc)
     doc = re.sub(r'(<style\b[^>]*?)\sdata-(?:url|href)="[^"]*"', r"\1", doc)
 
-    # The Wix "Carousel" widget renders as an empty block on the live site; keep
-    # the sized container but drop its remote iframe source.
-    doc = re.sub(r'(<(?:wix-)?iframe\b[^>]*?)\sdata-src="[^"]*Carousel[^"]*"', r"\1", doc)
+    # 2. Components Wix renders from its page data: every slideshow slide,
+    #    video players and the "Carousel" widget.
+    doc = expand_galleries(doc, props)
+    doc = fill_videos(doc, props, prefix, variant)
+    doc = fill_carousels(doc, props, prefix)
 
-    # 2. Swap blurred gallery placeholders for full-size images.
+    # Swap blurred gallery placeholders for full-size images.
     doc = upgrade_lqip(doc)
 
     # 3. Inline external stylesheets.
@@ -171,7 +319,6 @@ def convert(page, variant, src):
     download_all(MEDIA_RE.findall(doc), "media")
     download_all(FONT_RE.findall(doc), "fonts")
     download_all(UI_RE.findall(doc), "ui")
-    prefix = rel_prefix(page, variant)
 
     def to_local(m):
         rel = resolved(m.group(0))
@@ -211,7 +358,8 @@ def main():
     raw = {"desktop": sys.argv[1], "mobile": sys.argv[2]}
     for variant, d in raw.items():
         for page in PAGES:
-            convert(page, variant, os.path.join(d, page + ".html"))
+            convert(page, variant, os.path.join(d, page + ".html"),
+                    os.path.join(d.rstrip("/") + "_data", page + ".json"))
     with open(MANIFEST, "w") as f:
         json.dump(dict(sorted(downloaded.items())), f, indent=0)
     print(f"{len(downloaded)} assets in manifest")
