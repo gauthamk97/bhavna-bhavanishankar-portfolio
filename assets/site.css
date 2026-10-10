@@ -256,6 +256,11 @@
 .site-pgfs__bar .fullscreen-icon { width: 38px; height: 44px; font-size: 26px; line-height: 44px; }
 .site-pgfs__bar .fullscreen-expand { margin-top: -4px; }
 .site-pgfs .fullscreen-social-love-container { display: flex; margin-left: 55px; }
+.site-pgfs .fullscreen-cart-icon { display: block; min-width: 38px; box-sizing: border-box; height: 44px; margin-left: 55px; flex: none; }
+.site-pgfs .fullscreen-cart-icon button { display: block; width: 24px; height: 27px; margin: 3px 0 0 7px; color: inherit; }
+.site-pgfs .fullscreen-social-share-box { width: 24px; height: 44px; margin-left: 27px; flex: none; }
+.site-pgfs .fullscreen-social-share-box button { display: block; width: 24px; height: 44px; padding-top: 4px; box-sizing: border-box; color: inherit; display: flex; align-items: flex-start; }
+.site-pgfs .fullscreen-social-share-box + .fullscreen-social-love-container { margin-left: 27px; }
 .site-pgfs .fullscreen-social-love { position: relative; }
 .site-pgfs .fullscreen-social-love svg { position: absolute; top: 3px; left: 7px; }
 .site-pgfs .fullscreen-social-love.pro-gallery-loved { color: #e03939 !important; }
@@ -332,7 +337,9 @@
 /* Mobile: back arrow and love in a 60px top bar, items swipe sideways with the
    title under the image. */
 .site-pgfs--mobile .site-pgfs__bar { top: 0; height: 60px; }
-.site-pgfs--mobile .fullscreen-close { width: 60px; height: 60px; font-size: 20px; line-height: 60px; }
+.site-pgfs--mobile .fullscreen-close { width: 60px; height: 60px; font-size: 20px; line-height: 60px;
+  display: flex; justify-content: center; align-items: center; }
+.site-pgfs--mobile .fullscreen-close::before { display: block; }
 .site-pgfs--mobile .fullscreen-social { padding: 0 5px 0 0; }
 .site-pgfs--mobile .fullscreen-social-love-container {
   position: relative;

@@ -321,19 +321,48 @@
 
   // Wix lays out dropdown menus at runtime: labels are centred in the item's
   // height and the "More" overflow item is hidden when every item fits.
+  // Each item gets its measured width rounded up, as Wix sets it inline.
   function initMenu(menu) {
-    [].forEach.call(menu.querySelectorAll('li:not([data-index="__more__"])'), function (li) {
-      var label = li.querySelector('p');
-      if (label && li.clientHeight) label.style.lineHeight = li.clientHeight + 'px';
-    });
+    var items = menu.querySelectorAll('li:not([data-index="__more__"])');
+    function size() {
+      [].forEach.call(items, function (li) { li.removeAttribute('style'); });
+      var widths = [].map.call(items, function (li) { return Math.ceil(li.getBoundingClientRect().width); });
+      [].forEach.call(items, function (li, k) {
+        var h = li.clientHeight;
+        if (!h) return;
+        li.style.cssText = 'width: ' + widths[k] + 'px; height: ' + h + 'px; position: relative; box-sizing: border-box; ' +
+          'overflow: visible; visibility: inherit;';
+        var label = li.querySelector('p');
+        if (label) label.style.lineHeight = h + 'px';
+      });
+    }
+    [].forEach.call(items, function (li) { li.setAttribute('aria-hidden', 'false'); });
+    size();
+    if (document.fonts) document.fonts.ready.then(size);
     var more = menu.querySelector('li[data-index="__more__"]');
     var drop = menu.querySelector('[id$="moreContainer"]');
     if (more && drop && !drop.children.length) {
       // Out of flow, so the visible items right-align within the menu like on Wix.
-      more.style.visibility = 'hidden';
-      more.style.position = 'absolute';
-      more.style.height = '0';
+      more.setAttribute('aria-hidden', 'true');
+      more.style.cssText = 'height: 0px; overflow: hidden; position: absolute; visibility: hidden;';
+      var moreLabel = more.querySelector('p');
+      if (moreLabel) moreLabel.setAttribute('tabindex', '-1');
     }
+  }
+
+  // Wix's keyboard mode: Tab turns the focus rings on (and pro-galleries'
+  // "accessible" styles); a mouse press turns the rings off until the next Tab.
+  function initFocusMode() {
+    var site = document.getElementById('SITE_CONTAINER');
+    if (!site) return;
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Tab') return;
+      site.classList.add('focus-ring-active', 'keyboard-tabbing-on');
+      [].forEach.call(document.querySelectorAll('div.pro-gallery.inline-styles:not(.accessible)'), function (g) {
+        g.className = g.className.replace(/ (ltr|rtl) /, ' accessible  $1 ');
+      });
+    });
+    document.addEventListener('mousedown', function () { site.classList.remove('keyboard-tabbing-on'); }, true);
   }
 
   // Wix's scroll lock: Wix's own CSS fixes the body in place and offsets the
@@ -743,16 +772,25 @@
       (mobile ? '' : ' fullscreen-icon') + ' has-custom-focus" role="checkbox" aria-checked="false" title="Love">' +
       '<svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path fill-rule="evenodd"></path></svg>' +
       '</button><i class="fullscreen-social-love-count"></i></span>';
+    // Art Store viewers also show Cart and Share icons (inert here) before the heart.
+    var store = side && !mobile;
+    var storeIcons = store
+      ? '<span class="fullscreen-icon fullscreen-cart-icon has-custom-focus" title="Cart" aria-label="Cart" tabindex="0">' +
+        '<button tabindex="-1"><svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M18.7529,17.5742 C18.7159,17.8162 18.5039,18.0002 18.2589,18.0002 L5.7409,18.0002 C5.4959,18.0002 5.2839,17.8162 5.2469,17.5742 L4.0029,9.2872 C3.9879,9.1882 4.0329,9.1192 4.0609,9.0872 C4.0889,9.0542 4.1499,9.0002 4.2499,9.0002 L19.7499,9.0002 C19.8499,9.0002 19.9109,9.0542 19.9399,9.0872 C19.9669,9.1192 20.0119,9.1882 19.9969,9.2872 L18.7529,17.5742 Z M8.9999,7.9982 C8.9999,6.3452 10.3459,5.0002 11.9999,5.0002 C13.6539,5.0002 14.9999,6.3452 14.9999,7.9982 L14.9999,8.0002 L8.9999,8.0002 L8.9999,7.9982 Z M20.6969,8.4342 C20.4589,8.1582 20.1139,8.0002 19.7499,8.0002 L15.9999,8.0002 L15.9999,7.9982 C15.9999,5.7942 14.2059,4.0002 11.9999,4.0002 C9.7949,4.0002 7.9999,5.7942 7.9999,7.9982 L7.9999,8.0002 L4.2499,8.0002 C3.8859,8.0002 3.5409,8.1582 3.3029,8.4342 C3.0649,8.7102 2.9599,9.0752 3.0139,9.4352 L4.2579,17.7222 C4.3679,18.4512 5.0049,19.0002 5.7409,19.0002 L18.2589,19.0002 C18.9949,19.0002 19.6319,18.4512 19.7419,17.7222 L20.9859,9.4352 C21.0399,9.0752 20.9349,8.7102 20.6969,8.4342 L20.6969,8.4342 Z" ' +
+        'fill-rule="evenodd"></path></svg></button></span><div class="fullscreen-icon fullscreen-social-share-box pro-fullscreen-store ">' +
+        '<button class="fullscreen-social-share-icon has-custom-focus" tabindex="0" title="Share" aria-haspopup="menu" ' +
+        'aria-pressed="false">' + SHARE_SVG + '</button></div>'
+      : '';
     var bar = mobile
       ? '<div class="fullscreen-mobile-bar site-pgfs__bar"><button class="fullscreen-close progallery-svg-font-icons-back" ' +
         'aria-label="Exit expand mode"></button><div class="fullscreen-social">' + love + '</div></div>'
       : '<div class="site-pgfs__bar"><div class="fullscreen-social"><button class="fullscreen-icon has-custom-focus fullscreen-expand ' +
-        'progallery-svg-font-icons-expand-arrow" title="Open in fullscreen"></button>' + love + '</div>' +
+        'progallery-svg-font-icons-expand-arrow" title="Open in fullscreen"></button>' + storeIcons + love + '</div>' +
         '<div class="fullscreen-nav"><button class="fullscreen-icon fullscreen-close progallery-svg-font-icons-close-x" ' +
         'aria-label="Exit expand mode"></button></div></div>';
     var info = function (title) {
       return '<div class="site-pgfs__info' + (side && !mobile ? ' fullscreen-side-bar' : '') + '">' +
-        '<div class="fullscreen-side-bar-info-container"><div class="fullscreen-side-bar-title"><h1>' + title +
+        '<div class="fullscreen-side-bar-info-container"' + (mobile ? '' : ' tabindex="0"') + '><div class="fullscreen-side-bar-title"><h1>' + title +
         '</h1></div></div></div>';
     };
     var body = mobile
@@ -761,15 +799,16 @@
         }).join('') + '</div>'
       : (side ? '<div class="site-pgfs__stage"></div>' : '<div class="site-pgfs__expand"><div class="site-pgfs__stage"></div></div>') +
         info('') +
-        '<button class="fullscreen-icon site-pgfs__arrow site-pgfs__prev" aria-label="Previous Item">' + ARROW_SVG + '</button>' +
-        '<button class="fullscreen-icon site-pgfs__arrow site-pgfs__next" aria-label="Next Item">' + ARROW_SVG + '</button>';
+        '<button class="fullscreen-icon site-pgfs__arrow site-pgfs__prev" aria-label="Previous Item" tabindex="-1">' + ARROW_SVG + '</button>' +
+        '<button class="fullscreen-icon site-pgfs__arrow site-pgfs__next" aria-label="Next Item" tabindex="-1">' + ARROW_SVG + '</button>';
     var host = document.createElement('div');
     host.className = 'fullscreen-comp-wrapper ' + comp + ' site-pgfs-host';
     host.innerHTML = '<div class="pro-fullscreen-wrapper site-pgfs" id="pro-fullscreen-wrapper">' +
       '<div id="fullscreen-view" data-hook="fullscreen-view" class="fullscreen pro-fullscreen pro-fullscreen-inline-styles ' +
       'inline-styles pro-fullscreen-v2 fullscreen-bright site-pgfs__view' + (mobile ? ' site-pgfs--mobile' : '') +
       (side ? ' site-pgfs--side' : '') + '" role="dialog" aria-modal="true" tabindex="-1" ' +
-      'aria-label="Gallery item, detailed view">' + bar + body + '</div></div>';
+      'aria-label="Gallery item, detailed view">' + bar + body +
+      '<div tabindex="0" aria-label="Gallery item, detailed view"></div></div></div>';
     var wrapper = host.firstChild, view = wrapper.firstChild;
     var loveBtn = view.querySelector('.fullscreen-social-love');
     var count = view.querySelector('.fullscreen-social-love-count');
@@ -848,6 +887,16 @@
       else show(index + step, true);
     }
     function onKey(e) {
+      if (e.key === 'Tab') {  // Wix keeps Tab inside the viewer
+        var stops = [].filter.call(view.querySelectorAll('button, [tabindex]'), function (el) {
+          return el.tabIndex >= 0 && !el.disabled && el.offsetParent !== null || el === view.lastChild;
+        });
+        var first = stops[0], last = stops[stops.length - 1];
+        if (!view.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        return;
+      }
       if (e.key === 'Escape') close();
       else if (e.key === 'ArrowLeft') go(-1);
       else if (e.key === 'ArrowRight') go(1);
@@ -1012,6 +1061,11 @@
       }
       item.addEventListener('mouseenter', function () { hover(true); });
       item.addEventListener('mouseleave', function () { hover(false); });
+      // Keyboard focus on the item shows the same overlay (and its love button).
+      item.addEventListener('focusin', function () { if (!item.matches(':hover')) hover(true); });
+      item.addEventListener('focusout', function (e) {
+        if (!item.contains(e.relatedTarget) && !item.matches(':hover')) hover(false);
+      });
       // The love button keeps a local state (shared with the fullscreen view);
       // the share button opens Wix's share box.
       function toggleLove() {
@@ -1104,5 +1158,6 @@
     [].forEach.call(document.querySelectorAll('div.pro-gallery[id^="pro-gallery-"]:not([id^="pro-gallery-container-"])'),
       initProGallery);
     initAnchors();
+    initFocusMode();
   });
 })();
