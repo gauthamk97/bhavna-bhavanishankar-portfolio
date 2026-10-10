@@ -109,12 +109,12 @@
     box.innerHTML =
       '<figure class="site-zoom__figure"><img alt=""><figcaption>' +
       '<div class="site-zoom__title"></div><div class="site-zoom__desc"></div></figcaption></figure>' +
-      '<button class="site-zoom__close" aria-label="close"><svg viewBox="0 0 18 18" width="18" height="18">' +
-      '<path d="M1.4 0L9 7.6 16.6 0 18 1.4 10.4 9 18 16.6 16.6 18 9 10.4 1.4 18 0 16.6 7.6 9 0 1.4z"/></svg></button>' +
-      '<button class="site-zoom__nav site-zoom__next" aria-label="next"><svg viewBox="0 0 18 31" width="18" height="31">' +
-      '<path d="M2.1 0L0 2.1l13.8 13.4L0 28.9 2.1 31 18 15.5z"/></svg></button>' +
-      '<button class="site-zoom__nav site-zoom__prev" aria-label="previous"><svg viewBox="0 0 18 31" width="18" height="31">' +
-      '<path d="M15.9 0L18 2.1 4.2 15.5 18 28.9 15.9 31 0 15.5z"/></svg></button>';
+      '<button class="site-zoom__close" aria-label="close"><svg viewBox="0 0 180 180" width="18" height="18">' +
+      '<path d="M5 5 L175 175 M175 5 L5 175"/></svg></button>' +
+      '<button class="site-zoom__nav site-zoom__next" aria-label="next"><svg viewBox="0 0 180 310" width="18" height="31">' +
+      '<path d="M10 10 L170 161 M170 150 L10 300"/></svg></button>' +
+      '<button class="site-zoom__nav site-zoom__prev" aria-label="previous"><svg viewBox="0 0 180 310" width="18" height="31">' +
+      '<path d="M170 10 L10 161 M10 150 L170 300"/></svg></button>';
     var img = box.querySelector('img');
     var figure = box.querySelector('figure');
     var closeButton = box.querySelector('.site-zoom__close');
@@ -137,12 +137,22 @@
       box.querySelector('.site-zoom__desc').textContent = d.desc;
       layout();
     }
+    // As on Wix, a step fades the picture out (0.5s), swaps it, then fades
+    // the new one in.
+    var swapTimer = 0;
     function go(step) {
       i = (i + step + ghosts.length) % ghosts.length;
-      render();
       pushLightbox(ghosts[i].getAttribute('data-item-id'));
+      figure.style.opacity = 0;
+      clearTimeout(swapTimer);
+      swapTimer = setTimeout(function () {
+        render();
+        var show = function () { figure.style.opacity = 1; };
+        if (img.decode) img.decode().then(show, show); else show();
+      }, 550);
     }
     function close(quiet) {
+      clearTimeout(swapTimer);
       window.removeEventListener('resize', layout);
       box.remove();
       lockZoomScroll(false);
@@ -531,25 +541,222 @@
     });
   }
 
-  // Video player: the cover (poster + play button) is swapped for a native
-  // player with controls on click, like Wix's player starts on its cover.
+  // Video player: the cover (poster + play button) is swapped for Wix's
+  // Playable control bar (markup and classes below, styled by the page CSS)
+  // driven by the video element; touch devices keep the native controls.
+  var PLAYER_HTML = '<div data-player-name="Playable" data-testid="playable" class="@@VP@@__playerContainer" aria-label="Your Video Title Video Player"><div data-playable-hook="player-container" dir="ltr" data-playable-dir="ltr" class="zOCV0a T19tts"><div class="upGNDJ" data-playable-component=""></div><div class="KE_jFc lJAVgj QGS4E_" data-playable-hook="screen-block" data-playable-component=""><video playsinline="true"></video></div><div class="nD83ou" data-playable-component=""><div class="i466Wq"><div class="zCT2p8" data-playable-component=""><div class="chEfQZ TJLRFP" role="tooltip"><div class="b3332a" data-playable-hook="tooltip-inner">Mute</div></div></div></div><div data-playable-hook="bottom-block" class="h6tO2q KeMNgX n4zOLX dGEJNK"><div class="e0gLfY" data-playable-hook="screen-bottom-background"></div><div class="DeVBBk" data-playable-hook="progress-bar-container"><div data-playable-hook="progress-control" class="zkN8A4"><div class="F937Xv"><div class="n9U43a gSxZz0"></div><div data-playable-hook="progress-buffered" class="n9U43a qvWDEb"></div><div data-playable-hook="progress-seek-to" class="n9U43a CBrvgf wix-playable--progress-seek-to"></div><div data-playable-hook="progress-played" class="n9U43a HWlKFg wix-playable--progress-played"></div></div><div data-playable-hook="progress-hitbox" class="If2iq7"></div><div data-playable-hook="progress-seek-button" class="gXgLSk"><div class="NJb7BF wix-playable--progress-seek-btn"></div></div></div></div><div class="klgBC8"><div class="eCyqCF" data-playable-hook="controls-container-left"><div class="CQHhb9" data-playable-hook="play-container"><div class="G6YQoM" data-playable-hook="playback-control" data-playable-is-playing="true"><button class="DrDrQb Dgk9zI" data-playable-hook="playback-control" aria-label="Pause" type="button"><div class="kBerBD"><svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 26 26" preserveaspectratio="xMidYMin slice" class="f9lBoW" width="100%"><path class="wix-playable--play-svg-fill" d="M8 6v14l10.25-7.18L8 6z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 35 35" preserveaspectratio="xMidYMin slice" class="ynsnWE" width="100%"><path class="wix-playable--play-svg-fill" d="M10 7v21l16-11L10 7z"></path></svg></div><div class="dMFut_"><svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 26 26" preserveaspectratio="xMidYMin slice" class="f9lBoW" width="100%"><path class="wix-playable--play-svg-fill" d="M15 6h3v14h-3V6zM8 6h3v14H8V6z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 35 35" preserveaspectratio="xMidYMin slice" class="ynsnWE" width="100%"><path class="wix-playable--play-svg-fill" d="M10 7h5v21h-5V7zm10 0h5v21h-5V7z"></path></svg></div></button></div></div><div class="hcWOJc" data-playable-hook="volume-container"><div class="rposrv" data-playable-hook="volume-control" data-playable-is-muted="false"><button class="AC5beo YHoSg4 sBQrEF" data-playable-hook="mute-button" aria-label="Mute" type="button"><div class="TpPqAj WFWwGW"><svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 26 26" preserveaspectratio="xMidYMin slice" class="zX3rZk" width="100%"><path fill-rule="evenodd" class="wix-playable--volume-svg-fill" d="M 18.5 14.0476 L 16.154 16.3936 L 15.372 15.6116 L 17.718 13.2656 L 15.372 10.9196 L 16.154 10.1376 L 18.5 12.4836 L 20.846 10.1376 L 21.628 10.9196 L 19.282 13.2656 L 21.628 15.6116 L 20.846 16.3936 L 18.5 14.0476 Z M 7 9.76563 L 13 5.76563 L 13 19.7656 L 7 15.7656 L 4 15.7656 L 4 9.76563 L 7 9.76563 Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 35 35" preserveaspectratio="xMidYMin slice" class="Llxf2g" width="100%"><path fill-rule="evenodd" class="wix-playable--volume-svg-fill" d="M23.586 18.04l-2.829-2.828 1.415-1.415L25 16.626l2.828-2.83 1.415 1.416-2.829 2.828 2.829 2.828-1.415 1.415L25 19.453l-2.828 2.83-1.415-1.415 2.829-2.828zM9 13.04l7-5v19l-7-5H5v-9h4z"></path></svg></div><div class="_AY9eW"><svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 26 26" preserveaspectratio="xMidYMin slice" class="zX3rZk" width="100%"><path fill-rule="evenodd" class="wix-playable--volume-svg-fill" d="M 7 9.8025 L 13 5.8025 L 13 19.8025 L 7 15.8025 L 4 15.8025 L 4 9.8025 L 7 9.8025 Z M 17.243 17.4285 L 16.216 16.4025 A 4.548 4.548 0 0 0 16.216 9.9705 L 17.243 8.9435 A 6 6 0 0 1 17.243 17.4285 Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 35 35" preserveaspectratio="xMidYMin slice" class="Llxf2g" width="100%"><path class="wix-playable--volume-svg-fill" d="M9 13l7-5v19l-7-5H5v-9h4zm12.884 11.407l-1.414-1.414a7.174 7.174 0 000-10.146l1.414-1.414a9.174 9.174 0 010 12.974z" fill-rule="evenodd"></path></svg></div><div class="fVJUwk"><svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 26 26" preserveaspectratio="xMidYMin slice" class="zX3rZk" width="100%"><path fill-rule="evenodd" class="wix-playable--volume-svg-fill" d="M 7 9.8025 L 13 5.8025 L 13 19.8025 L 7 15.8025 L 4 15.8025 L 4 9.8025 L 7 9.8025 Z M 20.071 20.1975 L 19.047 19.1725 A 8.552 8.552 0 0 0 19.047 7.0795 L 20.071 6.0545 C 23.976 9.9605 23.976 16.2915 20.071 20.1975 Z M 17.243 17.4285 L 16.216 16.4025 A 4.548 4.548 0 0 0 16.216 9.9705 L 17.243 8.9435 A 6 6 0 0 1 17.243 17.4285 Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 35 35" preserveaspectratio="xMidYMin slice" class="Llxf2g" width="100%"><path fill-rule="evenodd" class="wix-playable--volume-svg-fill" d="M9 13.04l7-5v19l-7-5H5v-9h4zm16.897 15.794l-1.414-1.414c5.237-5.238 5.237-13.73 0-18.966l1.414-1.414c6.018 6.018 6.018 15.776 0 21.794zm-4.013-4.387l-1.414-1.414a7.174 7.174 0 000-10.146l1.414-1.414a9.174 9.174 0 010 12.974z"></path></svg></div></button><div class="zlb1tU" data-playable-hook="volume-input-block" aria-label="Volume control" aria-valuemin="0" aria-valuemax="100" value="100"><div class="ALyB63 NNEF0d wix-playable--volume-progress-background"></div><div class="ALyB63 ntj3pK wix-playable--volume-progress" data-playable-hook="volume-input"></div></div></div></div><div class="_Jar1y" data-playable-hook="time-container"><div data-playable-hook="time-control" class="Y2IrWm wix-playable--time-text"><span data-playable-hook="current-time-indicator" class="ppKMt5">00:04</span><span data-playable-hook="duration-time-indicator" class="ppKMt5 X9c9dJ">00:45</span></div></div></div><div class="h8pU3d" data-playable-hook="controls-container-right"><div class="WYxGM3" data-playable-hook="picture-in-picture-container"><div class="me1Viv" data-playable-hook="picture-in-picture-control" data-is-picture-in-picture="false"><button class="LVC3T9 oelO2C" data-playable-hook="picture-in-picture-control" aria-label="Play Picture-in-Picture" type="button"><div class="NP8Nag"><svg class="R2Sp_B" xmlns="http://www.w3.org/2000/svg" viewbox="0 0 26 26" preserveaspectratio="xMidYMin slice" width="100%"><g fill-rule="evenodd" class="wix-playable--picture-in-picture-svg-fill"><path d="M11 19H5V6h15v5h-2V8H7v9h4v2z"></path><path d="M13 13h9v8h-9v-8zm2 2v4h5v-4h-5z"></path></g></svg><svg class="uIhFwa" viewbox="0 0 35 35" version="1" xmlns="http://www.w3.org/2000/svg" preserveaspectratio="xMidYMin slice" width="100%"><g fill-rule="evenodd" class="wix-playable--picture-in-picture-svg-fill"><path d="M14 26H5V7h22v7h-2V9H7v15h7v2z"></path><path d="M17 17h12v11H17V17zm2 2v7h8v-7h-8z"></path></g></svg></div><div class="Qj8pk8"><svg class="R2Sp_B" xmlns="http://www.w3.org/2000/svg" viewbox="0 0 26 26" preserveaspectratio="xMidYMin slice" width="100%"><g fill-rule="evenodd" class="wix-playable--picture-in-picture-svg-fill"><path d="M12 19H5V6h15v5h-2V8H7v9h5v2z"></path><path d="M21 15h-7v-2h7v2z"></path><path d="M16 20v-7h-2v7h2z"></path><path d="M21.279 18.95l-1.415 1.414-4.95-4.95L16.329 14l4.95 4.95z"></path></g></svg><svg class="uIhFwa" viewbox="0 0 35 35" version="1" xmlns="http://www.w3.org/2000/svg" preserveaspectratio="xMidYMin slice" width="100%"><g fill-rule="evenodd" class="wix-playable--picture-in-picture-svg-fill"><path d="M17 26H5V7h22v9h-2V9H7v15h10v2z"></path><path d="M28 21h-8v-2h8v2z"></path><path d="M22 27v-8h-2v8h2z"></path><path d="M29 27l-1 1-7-6 2-2 6 7z"></path></g></svg></div></button></div></div><div class="ES2lfl" data-playable-hook="full-screen-container"><div class="Rge5wA" data-playable-hook="full-screen-control"><button class="jcZoTL XqQ0Rk" data-playable-hook="full-screen-button" aria-label="Enter full screen" type="button"><svg class="XnkpkU" xmlns="http://www.w3.org/2000/svg" viewbox="0 0 26 26" preserveaspectratio="xMidYMin slice" width="100%"><path class="wix-playable--full-screen-svg-fill" fill-rule="evenodd" d="M8 16H6v4h4v-2H8v-2zM6 7v3h2V8h2V6H6v1zm14-1h-4v2h2v2h2V6zm-2 12h-2v2h4v-4h-2v2z"></path></svg><svg class="AZEFhQ" xmlns="http://www.w3.org/2000/svg" viewbox="0 0 35 35" preserveaspectratio="xMidYMin slice" width="100%"><path class="wix-playable--full-screen-svg-fill" fill-rule="evenodd" d="M11 28h2v-6H7v2h4v4zm2-21h-2v4H7v2h6V7zm9 6h6v-2h-4V7h-2v6zm2 11h4v-2h-6v6h2v-4z"></path></svg></button></div></div></div></div></div></div></div></div>';
+
+  function fmtTime(t) {
+    t = Math.max(0, Math.floor(t || 0));
+    var m = Math.floor(t / 60), s = t % 60;
+    return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
   function initVideo(root) {
     var cover = root.querySelector('[data-testid="playable-cover"]');
     if (!cover) return;
     cover.addEventListener('click', function () {
-      var video = document.createElement('video');
-      video.className = 'site-video';
-      video.src = root.getAttribute('data-video');
-      video.controls = true;
-      video.playsInline = true;
-      video.loop = root.getAttribute('data-loop') === 'true';
-      video.muted = root.getAttribute('data-muted') === 'true';
+      var src = root.getAttribute('data-video');
+      var loop = root.getAttribute('data-loop') === 'true';
+      var muted = root.getAttribute('data-muted') === 'true';
       var img = cover.querySelector('img');
-      if (img) video.poster = img.src;
-      root.appendChild(video);
+      if (/Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent)) {
+        var native = document.createElement('video');
+        native.className = 'site-video';
+        native.src = src;
+        native.controls = true;
+        native.playsInline = true;
+        native.loop = loop;
+        native.muted = muted;
+        if (img) native.poster = img.src;
+        root.appendChild(native);
+        cover.remove();
+        native.play();
+        return;
+      }
+      var vp = (root.className.match(/VideoPlayer\d+/) || ['VideoPlayer'])[0];
+      var wrap = document.createElement('div');
+      wrap.innerHTML = PLAYER_HTML.replace(/@@VP@@/g, vp);
+      wrap = wrap.firstChild;
+      root.appendChild(wrap);
       cover.remove();
-      video.play();
+      buildPlayer(root, wrap, src, loop, muted, img && img.src);
     });
+  }
+
+  function buildPlayer(root, wrap, src, loop, muted, poster) {
+    var $ = function (h) { return wrap.querySelector('[data-playable-hook="' + h + '"]'); };
+    var pc = $('player-container'), screen = $('screen-block'), bottom = $('bottom-block');
+    var video = wrap.querySelector('video');
+    var playBtn = wrap.querySelector('button[data-playable-hook="playback-control"]');
+    var playState = wrap.querySelector('div[data-playable-hook="playback-control"]');
+    var muteBtn = $('mute-button'), volCtl = $('volume-control'), volBlock = $('volume-input-block');
+    var volBar = $('volume-input'), progress = $('progress-control');
+    var played = $('progress-played'), buffered = $('progress-buffered');
+    var seekTo = $('progress-seek-to'), seekBtn = $('progress-seek-button');
+    var cur = $('current-time-indicator'), dur = $('duration-time-indicator');
+    var pipBtn = wrap.querySelector('button[data-playable-hook="picture-in-picture-control"]');
+    var pipCtl = $('picture-in-picture-control'), fsBtn = $('full-screen-button');
+    var tip = wrap.querySelector('[role="tooltip"]'), tipText = tip.firstChild;
+    var idle = 0, dragging = null, keyNav = false;
+
+    video.src = src;
+    video.loop = loop;
+    video.muted = muted;
+    video.preload = 'auto';
+    if (poster) video.poster = poster;
+    pc.tabIndex = 0;
+    if (!document.pictureInPictureEnabled) bottom.classList.add('eNEoBr');
+
+    function frac(e, el) {
+      var r = el.getBoundingClientRect();
+      return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    }
+    function showControls() {
+      bottom.classList.add('dGEJNK');
+      screen.classList.remove('aXrXkB');
+      clearTimeout(idle);
+      if (!video.paused && !dragging) idle = setTimeout(hideControls, 2000);
+    }
+    function hideControls() {
+      if (video.paused || wrap.querySelector('.AC5beo:hover, .zlb1tU:hover, [data-playable-hook="progress-control"]:hover')) return;
+      bottom.classList.remove('dGEJNK');
+      screen.classList.add('aXrXkB');
+    }
+    function updateTime() {
+      var d = video.duration || 0, p = d ? video.currentTime / d : 0;
+      cur.textContent = fmtTime(video.currentTime);
+      dur.textContent = fmtTime(d);
+      played.style.transform = 'scaleX(' + p + ')';
+      seekBtn.style.transform = 'translateX(' + p * progress.getBoundingClientRect().width + 'px)';
+      progress.setAttribute('aria-valuenow', (p * 100).toFixed(2));
+      progress.setAttribute('aria-valuetext', 'Already played ' + (p * 100).toFixed(2) + '%');
+    }
+    function updateBuffer() {
+      var d = video.duration, b = video.buffered;
+      buffered.style.width = (d && b.length ? b.end(b.length - 1) / d * 100 : 0) + '%';
+    }
+    function updatePlay() {
+      playBtn.classList.toggle('U10_e9', video.paused);
+      playBtn.setAttribute('aria-label', video.paused ? 'Play' : 'Pause');
+      playState.setAttribute('data-playable-is-playing', String(!video.paused));
+      if (video.paused) showControls();
+      else showControls();
+    }
+    function updateVolume() {
+      var m = video.muted || video.volume === 0;
+      muteBtn.classList.remove('sBQrEF', 'C4iBa_', 'LSYah9', 'rbNMd9');
+      if (m) muteBtn.classList.add('LSYah9', 'rbNMd9');
+      else muteBtn.classList.add(video.volume < 0.5 ? 'C4iBa_' : 'sBQrEF');
+      muteBtn.setAttribute('aria-label', m ? 'Unmute' : 'Mute');
+      volCtl.setAttribute('data-playable-is-muted', String(m));
+      volCtl.setAttribute('data-playable-volume-percent', Math.round(video.volume * 100));
+      volBar.style.width = (m ? 0 : video.volume * 100) + '%';
+      volBlock.setAttribute('aria-valuenow', Math.round(video.volume * 100));
+    }
+    function toggle() { if (video.paused) video.play(); else video.pause(); }
+    function sizes() {
+      var w = pc.getBoundingClientRect().width;
+      var s = [280, 300, 350, 400, 550].filter(function (b) { return w <= b; }).join('px ');
+      if (s) pc.setAttribute('data-playable-max-width', s + 'px');
+      else pc.removeAttribute('data-playable-max-width');
+      updateTime();
+    }
+    function tooltip(btn, text) {
+      if (!btn) { tip.classList.remove('D_qOXi'); return; }
+      tipText.textContent = text;
+      var box = tip.parentNode.getBoundingClientRect(), r = btn.getBoundingClientRect();
+      var left = r.left + r.width / 2 - box.left - tip.offsetWidth / 2;
+      tip.style.cssText = 'left:' + Math.max(0, Math.min(left, box.width - tip.offsetWidth)) + 'px;top:initial;bottom:0px';
+      tip.classList.add('D_qOXi');
+    }
+    [muteBtn, pipBtn, fsBtn].forEach(function (b) {
+      b.addEventListener('mouseenter', function () { tooltip(b, b.getAttribute('aria-label')); });
+      b.addEventListener('mouseleave', function () { tooltip(null); });
+      b.addEventListener('click', function () { if (b.matches(':hover')) tooltip(b, b.getAttribute('aria-label')); });
+    });
+
+    video.addEventListener('timeupdate', updateTime);
+    video.addEventListener('durationchange', function () { updateTime(); updateBuffer(); });
+    video.addEventListener('loadedmetadata', sizes);
+    video.addEventListener('progress', updateBuffer);
+    video.addEventListener('play', updatePlay);
+    video.addEventListener('pause', updatePlay);
+    video.addEventListener('volumechange', updateVolume);
+    video.addEventListener('click', toggle);
+    playBtn.addEventListener('click', toggle);
+    muteBtn.addEventListener('click', function () {
+      if (video.muted || video.volume === 0) { video.muted = false; if (video.volume === 0) video.volume = 1; }
+      else video.muted = true;
+    });
+    pc.addEventListener('mousemove', showControls);
+    pc.addEventListener('touchstart', showControls, { passive: true });
+    pc.addEventListener('keydown', function () { keyNav = true; wrap.setAttribute('data-playable-focus-source', 'key'); showControls(); });
+    pc.addEventListener('mousedown', function () { keyNav = false; wrap.removeAttribute('data-playable-focus-source'); });
+    pc.addEventListener('focusin', function (e) {
+      if (keyNav) e.target.classList.add('focus-within');
+    });
+    pc.addEventListener('focusout', function (e) { e.target.classList.remove('focus-within'); });
+
+    function drag(el, move) {
+      el.addEventListener('pointerdown', function (e) {
+        dragging = el;
+        el.setPointerCapture(e.pointerId);
+        move(e);
+        e.preventDefault();
+      });
+      el.addEventListener('pointermove', function (e) { if (dragging === el) move(e); });
+      el.addEventListener('pointerup', function () { dragging = null; showControls(); });
+    }
+    drag(progress, function (e) {
+      if (video.duration) video.currentTime = frac(e, progress) * video.duration;
+      updateTime();
+    });
+    progress.addEventListener('mousemove', function (e) { seekTo.style.width = frac(e, progress) * 100 + '%'; });
+    progress.addEventListener('mouseleave', function () { seekTo.style.width = '0%'; });
+    progress.addEventListener('keydown', function (e) {
+      var step = e.key === 'ArrowLeft' ? -5 : e.key === 'ArrowRight' ? 5 : 0;
+      if (step) { video.currentTime = Math.min(video.duration, Math.max(0, video.currentTime + step)); e.preventDefault(); }
+    });
+    drag(volBlock, function (e) {
+      video.muted = false;
+      video.volume = frac(e, volBlock);
+    });
+    volBlock.addEventListener('keydown', function (e) {
+      var step = e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -0.1 : e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 0.1 : 0;
+      if (step) { video.muted = false; video.volume = Math.min(1, Math.max(0, video.volume + step)); e.preventDefault(); }
+    });
+
+    fsBtn.addEventListener('click', function () {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (pc.requestFullscreen) pc.requestFullscreen();
+    });
+    document.addEventListener('fullscreenchange', function () {
+      var on = document.fullscreenElement === pc;
+      if (on) pc.setAttribute('data-playable-in-full-screen', 'true');
+      else pc.removeAttribute('data-playable-in-full-screen');
+      fsBtn.setAttribute('aria-label', on ? 'Exit full screen' : 'Enter full screen');
+      sizes();
+    });
+    pipBtn.addEventListener('click', function () {
+      if (document.pictureInPictureElement) document.exitPictureInPicture();
+      else if (video.requestPictureInPicture) video.requestPictureInPicture();
+    });
+    video.addEventListener('enterpictureinpicture', function () {
+      pipCtl.setAttribute('data-is-picture-in-picture', 'true');
+      pipBtn.setAttribute('aria-label', 'Exit Picture-in-Picture');
+    });
+    video.addEventListener('leavepictureinpicture', function () {
+      pipCtl.setAttribute('data-is-picture-in-picture', 'false');
+      pipBtn.setAttribute('aria-label', 'Play Picture-in-Picture');
+    });
+    window.addEventListener('resize', sizes);
+
+    updateVolume();
+    updateTime();
+    sizes();
+    video.play();
+    updatePlay();
   }
 
   // Wix pro-gallery slider: the arrows centre the next/previous item with a

@@ -23,6 +23,7 @@
   background: rgba(0, 0, 0, 0.9);
 }
 .site-zoom__figure {
+  transition: opacity 0.5s;
   position: absolute;
   top: 50px;
   left: 0;
@@ -42,6 +43,7 @@
   width: 100%;
   padding-top: 20px;
   font: 16px Helvetica, Arial, sans-serif;
+  letter-spacing: 0.2px;
   color: #fff;
   text-align: center;
 }
@@ -53,7 +55,9 @@
   background: none;
   cursor: pointer;
 }
-.site-zoom button svg { display: block; fill: #fff; }
+.site-zoom button svg { display: block; fill: none; stroke: #fff; }
+.site-zoom__close svg { stroke-width: 15px; }
+.site-zoom__nav svg { stroke-width: 20px; }
 .site-zoom__close { top: 50px; right: 50px; z-index: 500; width: 18px; height: 18px; }
 .site-zoom__nav { top: 50%; width: 18px; height: 31px; }
 .site-zoom__prev { left: 50px; }
@@ -401,3 +405,14 @@
 /* Loved state of the love button in the gallery item hover (as in the
    fullscreen view). */
 .pro-gallery .gallery-item-hover .info-element-social-love.info-element-loved { color: #e03939 !important; }
+
+/* Colours of Wix's video control bar (white), injected at runtime on Wix. */
+.wix-playable--title-text, .wix-playable--time-text { color: #fff; }
+.wix-playable--play-svg-fill, .wix-playable--volume-svg-fill, .wix-playable--full-screen-svg-fill,
+.wix-playable--logo-button-svg-fill, .wix-playable--download-svg-fill,
+.wix-playable--picture-in-picture-svg-fill, .wix-playable--overlay-play-svg-fill { fill: #fff; }
+.wix-playable--volume-svg-stroke, .wix-playable--overlay-play-svg-stroke { stroke: #fff; }
+.wix-playable--progress-played, .wix-playable--progress-seek-btn,
+.wix-playable--volume-progress, .wix-playable--volume-progress:after { background-color: #fff; }
+.wix-playable--progress-seek-to { background-color: rgba(255, 255, 255, 0.5); }
+.wix-playable--volume-progress-background { background-color: rgba(255, 255, 255, 0.25); }

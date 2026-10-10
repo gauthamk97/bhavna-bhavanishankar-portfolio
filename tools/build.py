@@ -421,7 +421,7 @@ def fill_carousels(doc, props, prefix):
         params = {"props": p.get("compProps", {}), "quality": p.get("quality", {}),
                   "marketingLandingPage": False, "items": items, "mainPageId": p.get("mainPageId")}
         local = prefix + carousel_widget(src) + "?" + src.split("?", 1)[1]
-        frame = (f'<iframe class="{m.group(3)}" src="{html.escape(local)}" loading="lazy" scrolling="no" '
+        frame = (f'<iframe class="{m.group(3)}" src="{html.escape(local)}" loading="lazy" scrolling="no" tabindex="-1" '
                  f"data-carousel='{attr_json(params)}'></iframe>")
         return re.sub(r'\sdata-src="[^"]*"', "", m.group(0)[:m.group(0).find("<iframe")]) + frame
     return re.sub(r'<wix-iframe id="(comp-[^"]+)"[^>]*data-src="([^"]*Carousel[^"]*)"[^>]*>'
