@@ -15,6 +15,7 @@
     var counter = gallery.querySelector('[data-testid="gallery-counter"]');
     if (!ghosts.length || !stage) return;
     var current = 0;
+    zoomSets.push(ghosts);
 
     function show(i) {
       current = (i + ghosts.length) % ghosts.length;
@@ -43,10 +44,52 @@
              title: title ? title.textContent : '', desc: desc ? desc.textContent : '' };
   }
 
-  function openZoom(ghosts, start) {
+  // Every slideshow's slides, for ?lightbox=<item id> links and history moves.
+  var zoomSets = [];
+  var zoom = null;
+
+  function lightboxParam() { return new URLSearchParams(location.search).get('lightbox'); }
+  function lightboxItem(id) {
+    for (var k = 0; k < zoomSets.length; k++) {
+      for (var j = 0; j < zoomSets[k].length; j++) {
+        if (zoomSets[k][j].getAttribute('data-item-id') === id) return { ghosts: zoomSets[k], index: j };
+      }
+    }
+    return null;
+  }
+  // Wix pushes a history entry with ?lightbox=<item id> for every item shown
+  // and one without it when the zoom closes.
+  function pushLightbox(id) {
+    var url = new URL(location.href);
+    if (id) url.searchParams.set('lightbox', id); else url.searchParams.delete('lightbox');
+    var next = url.pathname + url.search + url.hash;
+    if (next !== location.pathname + location.search + location.hash) history.pushState(null, '', next);
+  }
+
+  // Wix's zoom scroll lock: the body is fixed and the site shifted up by the
+  // scroll offset (so the page stays put behind the overlay), then restored.
+  var zoomScroll = 0;
+  function lockZoomScroll(on) {
+    var site = document.getElementById('SITE_CONTAINER');
+    if (on) {
+      zoomScroll = window.scrollY;
+      document.body.classList.add('siteScrollingBlocked');
+      if (site) site.style.marginTop = 'calc(-' + zoomScroll + 'px)';
+    } else {
+      document.body.classList.remove('siteScrollingBlocked');
+      if (site) site.style.removeProperty('margin-top');
+      window.scrollTo(0, zoomScroll);
+    }
+  }
+
+  function openZoom(ghosts, start, fromHistory) {
+    if (zoom) zoom.close(true);
     var i = start;
+    // Desktop: Wix sizes the image to fit 120px from the sides and leaves 143px
+    // for padding and caption (at least 15px above), never upscaling.
+    var sized = variant === 'desktop';
     var box = document.createElement('div');
-    box.className = 'site-zoom';
+    box.className = 'site-zoom' + (sized ? ' site-zoom--sized' : '');
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
     box.innerHTML =
@@ -59,19 +102,39 @@
       '<button class="site-zoom__nav site-zoom__next" aria-label="next"><svg viewBox="0 0 18 31" width="18" height="31">' +
       '<path d="M2.1 0L0 2.1l13.8 13.4L0 28.9 2.1 31 18 15.5z"/></svg></button>';
     var img = box.querySelector('img');
+    var figure = box.querySelector('figure');
 
+    function layout() {
+      if (!sized) return;
+      var info = JSON.parse(ghosts[i].querySelector('[data-image-info]').getAttribute('data-image-info')).imageData;
+      var vw = document.documentElement.clientWidth, vh = window.innerHeight;
+      var s = Math.min((vw - 240) / info.width, (vh - 173) / info.height, 1);
+      var w = Math.round(info.width * s), h = Math.round(info.height * s);
+      img.style.width = w + 'px';
+      img.style.height = h + 'px';
+      figure.style.width = w + 'px';
+      figure.style.marginTop = Math.round((vh - h - 143) / 2) + 'px';
+    }
     function render() {
       var d = itemData(ghosts[i]);
       img.src = d.src;
       img.alt = d.alt || '';
       box.querySelector('.site-zoom__title').textContent = d.title;
       box.querySelector('.site-zoom__desc').textContent = d.desc;
+      layout();
     }
-    function go(step) { i = (i + step + ghosts.length) % ghosts.length; render(); }
-    function close() {
+    function go(step) {
+      i = (i + step + ghosts.length) % ghosts.length;
+      render();
+      pushLightbox(ghosts[i].getAttribute('data-item-id'));
+    }
+    function close(quiet) {
       document.removeEventListener('keydown', onKey);
-      document.documentElement.classList.remove('site-zoom-open');
+      window.removeEventListener('resize', layout);
       box.remove();
+      lockZoomScroll(false);
+      zoom = null;
+      if (!quiet) pushLightbox(null);
     }
     function onKey(e) {
       if (e.key === 'Escape') close();
@@ -79,17 +142,28 @@
       else if (e.key === 'ArrowRight') go(1);
     }
 
-    box.querySelector('.site-zoom__close').addEventListener('click', close);
+    box.querySelector('.site-zoom__close').addEventListener('click', function () { close(); });
     box.querySelector('.site-zoom__prev').addEventListener('click', function () { go(-1); });
     box.querySelector('.site-zoom__next').addEventListener('click', function () { go(1); });
-    box.addEventListener('click', function (e) { if (e.target === box) close(); });
+    if (!sized) box.addEventListener('click', function (e) { if (e.target === box) close(); });
     document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', layout);
     if (ghosts.length < 2) box.classList.add('site-zoom--single');
-    render();
-    document.documentElement.classList.add('site-zoom-open');
+    lockZoomScroll(true);
     document.body.appendChild(box);
+    render();
+    if (!fromHistory) pushLightbox(ghosts[i].getAttribute('data-item-id'));
     box.querySelector('.site-zoom__close').focus();
+    zoom = { close: close, ghosts: ghosts, show: function (j) { i = j; render(); } };
   }
+
+  // Back/forward between zoom entries shows that item, or closes the zoom.
+  window.addEventListener('popstate', function () {
+    var id = lightboxParam(), hit = id && lightboxItem(id);
+    if (!hit) { if (zoom) zoom.close(true); return; }
+    if (zoom && zoom.ghosts === hit.ghosts) zoom.show(hit.index);
+    else openZoom(hit.ghosts, hit.index, true);
+  });
 
   // The site has no form backend on GitHub Pages, so the contact form hands the
   // message to the visitor's mail app, addressed to the site's contact email.
@@ -157,6 +231,38 @@
       if (!body.getAttribute('style')) body.removeAttribute('style');
       window.scrollTo(0, blockedAt);
     }
+  }
+
+  // Image-button tooltip (desktop): Wix shows the button's label in a black
+  // box above it 2s after the pointer enters (or it gets focus) and removes it
+  // as soon as the pointer leaves (or focus moves away).
+  function initTooltip(root) {
+    var link = root.querySelector('a, [role="button"]');
+    var slot = root.querySelector('[data-testid="linkImageContainer"]');
+    var label = link && link.getAttribute('aria-label');
+    if (!slot || !label) return;
+    var timer = null, tip = null;
+    function show() {
+      timer = null;
+      tip = document.createElement('div');
+      tip.id = root.getAttribute('aria-describedby') || '';
+      tip.className = 'X2JC73';
+      tip.innerHTML = '<div role="tooltip" class="IyPPl_" data-testid="imageButtonTooltip" style="top: 0px;">' +
+        '<span></span><span class="SRjxKM"></span></div>';
+      tip.firstChild.firstChild.textContent = label;
+      slot.insertBefore(tip, slot.firstChild);
+      tip.firstChild.style.top = -(tip.firstChild.offsetHeight + 8) + 'px';
+    }
+    function start() { if (!timer && !tip) timer = setTimeout(show, 2000); }
+    function stop() {
+      clearTimeout(timer);
+      timer = null;
+      if (tip) { tip.remove(); tip = null; }
+    }
+    root.addEventListener('mouseenter', start);
+    root.addEventListener('mouseleave', stop);
+    link.addEventListener('focus', start);
+    link.addEventListener('blur', stop);
   }
 
   // Same-page anchor links (and Wix's "Up" button) scroll smoothly, like on Wix.
@@ -377,6 +483,7 @@
     var mobile = variant === 'mobile';
     var side = root.getAttribute('data-pg-info') === 'side';
     var opener = document.activeElement;
+    var openedPgid = new URLSearchParams(location.search).get('pgid');
     var index = start;
     var love = '<span class="fullscreen-social-love-container"><button class="fullscreen-social-love' +
       (mobile ? '' : ' fullscreen-icon') + '" role="checkbox" aria-checked="false" title="Love">' +
@@ -464,7 +571,7 @@
       host.remove();
       blockScroll(false);
       document.title = pageTitle;
-      setUrl(null);
+      setUrl(openedPgid);  // Wix keeps a deep link's ?pgid= after closing
       if (opener && opener.focus) opener.focus();
     }
     function go(step) {
@@ -576,6 +683,9 @@
     [].forEach.call(document.querySelectorAll('wix-dropdown-menu'), initMenu);
     [].forEach.call(document.querySelectorAll('nav.TINY_MENU'), initTinyMenu);
     [].forEach.call(document.querySelectorAll('[data-testid="slide-show-gallery"]'), initGallery);
+    var deep = lightboxParam() && lightboxItem(lightboxParam());
+    if (deep) openZoom(deep.ghosts, deep.index, true);
+    if (variant === 'desktop') [].forEach.call(document.querySelectorAll('.wixui-image-button'), initTooltip);
     [].forEach.call(document.querySelectorAll('form'), initForm);
     [].forEach.call(document.querySelectorAll('[data-video]'), initVideo);
     [].forEach.call(document.querySelectorAll('div.pro-gallery[id^="pro-gallery-"]:not([id^="pro-gallery-container-"])'),

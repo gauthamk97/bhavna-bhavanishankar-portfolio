@@ -14,8 +14,6 @@
   object-fit: contain;
 }
 
-.site-zoom-open, .site-zoom-open body { overflow: hidden; }
-
 /* Matches Wix's image zoom view: 90% black overlay, image 50px from the top,
    centred white caption, thin 18px controls 50px from the viewport edges. */
 .site-zoom {
@@ -56,11 +54,30 @@
   cursor: pointer;
 }
 .site-zoom button svg { display: block; fill: #fff; }
-.site-zoom__close { top: 50px; right: 50px; width: 18px; height: 18px; }
+.site-zoom__close { top: 50px; right: 50px; z-index: 500; width: 18px; height: 18px; }
 .site-zoom__nav { top: 50%; width: 18px; height: 31px; }
 .site-zoom__prev { left: 50px; }
 .site-zoom__next { right: 50px; }
 .site-zoom--single .site-zoom__nav { visibility: hidden; }
+/* Desktop (site.js sizes the image): centred box with 35px above the image,
+   a 16px caption with 20px margins and 50px below; the prev/next controls are
+   the outer thirds of the screen. */
+.site-zoom--sized .site-zoom__figure {
+  position: relative;
+  top: auto;
+  margin: 0 auto;
+  padding: 35px 0 50px;
+  display: block;
+}
+.site-zoom--sized .site-zoom__figure img { max-width: none; max-height: none; }
+.site-zoom--sized .site-zoom__figure figcaption { padding-top: 0; font-weight: 100; }
+.site-zoom--sized .site-zoom__title { margin: 20px 0; }
+.site-zoom--sized .site-zoom__nav { top: 0; width: 33%; height: 100%; opacity: .9; }
+.site-zoom--sized .site-zoom__nav svg { position: absolute; top: 50%; }
+.site-zoom--sized .site-zoom__prev { left: 0; }
+.site-zoom--sized .site-zoom__prev svg { left: 50px; }
+.site-zoom--sized .site-zoom__next { right: 0; }
+.site-zoom--sized .site-zoom__next svg { right: 50px; }
 @media (max-width: 600px) {
   .site-zoom__figure img { max-width: calc(100vw - 32px); }
   .site-zoom__close { top: 16px; right: 16px; }

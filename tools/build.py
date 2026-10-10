@@ -164,6 +164,9 @@ def expand_galleries(doc, props):
             g = re.sub(r'data-image-info="[^"]+"',
                        lambda _: 'data-image-info="' + html.escape(json.dumps(info, separators=(",", ":"))) + '"', g)
             g = re.sub(r"describedby_item-\d+-", f"describedby_item-{i}-", g)
+            # Wix's zoom view puts ?lightbox=<item id> in the URL.
+            g = g.replace('data-testid="gallery-item-ghost"',
+                          f'data-testid="gallery-item-ghost" data-item-id="{html.escape(it.get("id", ""))}"', 1)
             ghosts.append(g)  # upgrade_lqip swaps in the full-size src from data-image-info
         doc = doc[:start] + "".join(ghosts) + doc[end:]
     return doc
@@ -402,7 +405,7 @@ def fill_carousels(doc, props, prefix):
                   "marketingLandingPage": False, "items": items, "mainPageId": p.get("mainPageId")}
         local = prefix + carousel_widget(src) + "?" + src.split("?", 1)[1]
         frame = (f'<iframe class="{m.group(3)}" src="{html.escape(local)}" loading="lazy" scrolling="no" '
-                 f"title=\"Carousel\" data-carousel='{attr_json(params)}'></iframe>")
+                 f"data-carousel='{attr_json(params)}'></iframe>")
         return re.sub(r'\sdata-src="[^"]*"', "", m.group(0)[:m.group(0).find("<iframe")]) + frame
     return re.sub(r'<wix-iframe id="(comp-[^"]+)"[^>]*data-src="([^"]*Carousel[^"]*)"[^>]*>'
                   r'<iframe class="([^"]*)"[^>]*></iframe>', fix, doc)
