@@ -1,6 +1,6 @@
 // Replaces the bits of Wix's runtime this site relies on: the desktop/mobile
 // page switch, slideshow galleries, image zoom, pro-gallery sliders and
-// fullscreen view, video players, carousels and the contact form.
+// fullscreen view, video players, and carousels.
 (function () {
   var meta = document.querySelector('meta[name="site-variant"]');
   var variant = meta.getAttribute('content');
@@ -295,39 +295,6 @@
     if (zoom && zoom.ghosts === hit.ghosts) zoom.show(hit.index);
     else openZoom(hit.ghosts, hit.index, true);
   });
-
-  // The site has no form backend on GitHub Pages, so the contact form hands the
-  // message to the visitor's mail app, addressed to the site's contact email.
-  var CONTACT_EMAIL = 'bhavna.bhavanishankar@gmail.com';
-
-  function initForm(form) {
-    var thanks = [].filter.call(form.querySelectorAll('[data-testid="richTextElement"]'), function (el) {
-      return /Thanks for submitting/i.test(el.textContent);
-    })[0];
-    if (thanks) thanks.classList.add('site-form-thanks');
-    form.setAttribute('novalidate', '');
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      var fields = form.querySelectorAll('input, textarea');
-      var invalid = [].filter.call(fields, function (f) { return !f.checkValidity(); });
-      [].forEach.call(fields, function (f) { f.setAttribute('aria-invalid', String(!f.checkValidity())); });
-      if (invalid.length) { invalid[0].focus(); return; }
-      function val(name) {
-        var f = form.querySelector('[name="' + name + '"]');
-        return f ? f.value : '';
-      }
-      var message = form.querySelector('textarea');
-      var body = 'Name: ' + val('name') + '\nEmail: ' + val('email') + '\n\n' + (message ? message.value : '');
-      location.href = 'mailto:' + CONTACT_EMAIL +
-        '?subject=' + encodeURIComponent(val('subject') || 'Website enquiry') +
-        '&body=' + encodeURIComponent(body);
-      if (thanks) thanks.classList.add('site-form-thanks--shown');
-      form.reset();
-    });
-    // Wix's submit is a plain <button> inside the form; make sure it submits.
-    var btn = form.querySelector('button');
-    if (btn && !btn.getAttribute('type')) btn.setAttribute('type', 'submit');
-  }
 
   // Wix lays out dropdown menus at runtime: labels are centred in the item's
   // height and the "More" overflow item is hidden when every item fits.
@@ -1360,7 +1327,6 @@
     if (deep) openZoom(deep.ghosts, deep.index, true);
     [].forEach.call(document.querySelectorAll('.wixui-image-button'), initTooltip);
     [].forEach.call(document.querySelectorAll('#SKIP_TO_CONTENT_BTN'), initSkip);
-    [].forEach.call(document.querySelectorAll('form'), initForm);
     [].forEach.call(document.querySelectorAll('[data-video]'), initVideo);
     [].forEach.call(document.querySelectorAll('div.pro-gallery[id^="pro-gallery-"]:not([id^="pro-gallery-container-"])'),
       initProGallery);

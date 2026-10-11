@@ -331,6 +331,21 @@ SKIP_BUTTON = ('<button id="SKIP_TO_CONTENT_BTN" class="SKIP_TO_CONTENT_BTN BqYk
                'Skip to Main Content</button>')
 
 
+def drop_footer_form(doc):
+    """The site has no form backend, so the footer's contact form is left out;
+    site.css lays the remaining footer items out in a shorter band."""
+    footer = doc.find('id="SITE_FOOTER"')
+    form = doc.find("<form", footer) if footer >= 0 else -1
+    if form < 0:
+        return doc
+    # The outermost footer component that contains the form.
+    for m in re.compile(r'<div id="comp-').finditer(doc, footer, form):
+        end = div_end(doc, m.start())
+        if end > form:
+            return doc[:m.start()] + doc[end:]
+    return doc
+
+
 def add_skip_button(doc):
     """Wix renders its "Skip to Main Content" button in the browser, after the
     top-of-page anchor, when the header has something focusable."""
@@ -481,6 +496,7 @@ def convert(page, variant, src, data):
     doc = fill_pro_galleries(doc, galleries)
     doc = sharpen_prerendered(doc)
     doc = add_skip_button(doc)
+    doc = drop_footer_form(doc)
 
     # Swap blurred gallery placeholders for full-size images.
     doc = upgrade_lqip(doc)
@@ -509,7 +525,7 @@ def convert(page, variant, src, data):
         return f"{m.group(1)}{link}\"" if link is not None else m.group(0)
     doc = re.sub(r'(<a\b[^>]*?\shref=")' + re.escape(SITE) + r'(/?[^"]*)"', fix_link, doc)
 
-    # 6. Wire in the replacement runtime (galleries, menu, form, device switch).
+    # 6. Wire in the replacement runtime (galleries, menu, device switch).
     other = "mobile" if variant == "desktop" else "desktop"
     alt = prefix + "/".join(page_path(page, other).split("/")[:-1])
     alt = alt + "/" if not alt.endswith("/") else alt
