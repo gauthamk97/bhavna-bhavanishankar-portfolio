@@ -497,6 +497,7 @@ def convert(page, variant, src, data):
     doc = sharpen_prerendered(doc)
     doc = add_skip_button(doc)
     doc = drop_footer_form(doc)
+    doc = doc.replace("&copy; 2023 by", "&copy; 2026 by")
 
     # Swap blurred gallery placeholders for full-size images.
     doc = upgrade_lqip(doc)
