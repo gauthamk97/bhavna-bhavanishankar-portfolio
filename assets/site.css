@@ -456,3 +456,8 @@
 .device-mobile-optimized [data-mesh-id=comp-ljn1lejs2inlineContent-gridContainer] > #comp-lk1he9mo {
   margin-bottom: 32px !important;
 }
+
+/* mgm-nexus, mobile only: Wix keeps two sections at a fixed minimum height
+   taken from an older layout, leaving large blank gaps below their content. */
+.device-mobile-optimized :is([data-mesh-id=comp-l6zlw5v12inlineContent-gridContainer],
+  [data-mesh-id=comp-l6zlw5v14inlineContent-gridContainer]) { min-height: auto !important; }
