@@ -432,3 +432,27 @@
 .wix-playable--volume-progress, .wix-playable--volume-progress:after { background-color: #fff; }
 .wix-playable--progress-seek-to { background-color: rgba(255, 255, 255, 0.5); }
 .wix-playable--volume-progress-background { background-color: rgba(255, 255, 255, 0.25); }
+
+/* mse, mobile only: skip the Research Methodology overview (the diagram and its
+   invisible hotspots) and list the six steps with even, tighter spacing. */
+.device-mobile-optimized [data-mesh-id=comp-ljn1lejs2inlineContent-gridContainer] {
+  display: flex !important; flex-direction: column; align-items: flex-start;
+}
+.device-mobile-optimized [data-mesh-id=comp-ljn1lejs2inlineContent-gridContainer] > :is(
+  #comp-lkhn31gj, #comp-lkhn3jmc, #comp-lkhn48dd, #comp-lkhn4eu1, #comp-lkhn4pml, #comp-lkhn4ucw,
+  #comp-ljn3k3hw, [data-mesh-id$="-wedge-12"]) { display: none !important; }
+.device-mobile-optimized [data-mesh-id=comp-ljn1lejs2inlineContent-gridContainer] > .qe3oTb {
+  height: 0 !important; margin: 0 !important; overflow: hidden;
+}
+.device-mobile-optimized [data-mesh-id=comp-ljn1lejs2inlineContent-gridContainer] > .W4V2qg {
+  margin: 28px 0 14px !important;
+}
+.device-mobile-optimized [data-mesh-id=comp-ljn1lejs2inlineContent-gridContainer] > .wixui-rich-text {
+  margin: 0 !important;
+}
+.device-mobile-optimized [data-mesh-id=comp-ljn1lejs2inlineContent-gridContainer] > #comp-ljn1lejt2 {
+  margin: 20px 0 0 !important;
+}
+.device-mobile-optimized [data-mesh-id=comp-ljn1lejs2inlineContent-gridContainer] > #comp-lk1he9mo {
+  margin-bottom: 32px !important;
+}
