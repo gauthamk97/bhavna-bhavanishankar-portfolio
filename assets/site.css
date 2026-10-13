@@ -457,7 +457,26 @@
   margin-bottom: 32px !important;
 }
 
-/* mgm-nexus, mobile only: Wix keeps two sections at a fixed minimum height
-   taken from an older layout, leaving large blank gaps below their content. */
+/* Mobile only: Wix keeps some sections at a fixed minimum height taken from an
+   older layout, leaving large blank gaps below their content (mgm-nexus x2,
+   spark-innovation-lab's "Outcome Development"). */
 .device-mobile-optimized :is([data-mesh-id=comp-l6zlw5v12inlineContent-gridContainer],
-  [data-mesh-id=comp-l6zlw5v14inlineContent-gridContainer]) { min-height: auto !important; }
+  [data-mesh-id=comp-l6zlw5v14inlineContent-gridContainer],
+  [data-mesh-id=comp-l6zlw5yv6inlineContent-gridContainer]) { min-height: auto !important; }
+/* Mobile only: columns whose content Wix moved elsewhere on mobile keep their
+   desktop height as an empty block (coastal-flavor, finz, copy-of-finz).
+   Columns showing a background image (page banners) keep their height. */
+.device-mobile-optimized [id^=comp-]:not(:has(> [data-hook=bgLayers] :is(img, video)))
+  > [data-mesh-id$=inlineContent]:has(> [data-mesh-id$=inlineContent-gridContainer]:empty) {
+  min-height: 0 !important; height: 0 !important;
+}
+
+/* Home, mobile only: Wix's mobile layout pairs some project headings with the
+   wrong project image; restore the desktop order (education, spark, mgm,
+   spatium, coastal, home), each image under its own heading. */
+.device-mobile-optimized [data-mesh-id=comp-j3v9refxinlineContent-gridContainer] > #comp-l4c81570 { grid-area: 4 / 1 / 5 / 2 !important; }
+.device-mobile-optimized [data-mesh-id=comp-j3v9refxinlineContent-gridContainer] > #comp-l4c8lcua { grid-area: 5 / 1 / 6 / 2 !important; }
+.device-mobile-optimized [data-mesh-id=comp-j3v9refxinlineContent-gridContainer] > #comp-l4c8zsbi { grid-area: 6 / 1 / 7 / 2 !important; }
+.device-mobile-optimized [data-mesh-id=comp-j3v9refxinlineContent-gridContainer] > #comp-l4c8my7p { grid-area: 7 / 1 / 8 / 2 !important; }
+.device-mobile-optimized [data-mesh-id=comp-j3v9refxinlineContent-gridContainer] > #comp-l4c8w1zq { grid-area: 8 / 1 / 9 / 2 !important; }
+.device-mobile-optimized [data-mesh-id=comp-j3v9refxinlineContent-gridContainer] > #comp-l4c8n1qg { grid-area: 9 / 1 / 10 / 2 !important; }

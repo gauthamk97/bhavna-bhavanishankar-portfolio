@@ -498,6 +498,10 @@ def convert(page, variant, src, data):
     doc = add_skip_button(doc)
     doc = drop_footer_form(doc)
     doc = doc.replace("&copy; 2023 by", "&copy; 2026 by")
+    if variant == "mobile":
+        # Desktop-sized text indents (e.g. 480px) squeeze mobile text into a
+        # one-word-wide column hundreds of pixels tall.
+        doc = re.sub(r"margin-left:\s*[2-9]\d\dpx;?", "", doc)
 
     # Swap blurred gallery placeholders for full-size images.
     doc = upgrade_lqip(doc)
